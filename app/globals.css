@@ -1,26 +1,163 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── Felisa Cafe — "Night Bar" ──────────────────────────────────────────────
+   The flyer says 5:00PM–12:00AM, so this direction takes that literally: a
+   late-night bar lit by neon, with the drinks as the only light source.     */
+
+@theme {
+  --color-night-950: #0e0518;
+  --color-night-900: #150a26;
+  --color-night-800: #1e0e36;
+  --color-night-700: #2c1550;
+
+  --color-glow-300: #d9bcff;
+  --color-glow-400: #c9a0ff;
+  --color-glow-500: #a86cf5;
+  --color-glow-600: #7b3fd4;
+
+  --color-sign: #ffcb6b;
+  --color-haze: #b9a3d6;
+
+  --color-ink: #f3ecff;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-felisa-display), ui-sans-serif, system-ui,
+    sans-serif;
+  --font-body: var(--font-felisa-body), ui-sans-serif, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-night-950);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  /* Two pools of light, the way a bar is lit from behind the counter. */
+  background-image:
+    radial-gradient(
+      60rem 40rem at 15% -10%,
+      rgba(123, 63, 212, 0.35),
+      transparent 70%
+    ),
+    radial-gradient(
+      45rem 35rem at 95% 8%,
+      rgba(168, 108, 245, 0.22),
+      transparent 70%
+    );
+  background-attachment: fixed;
+}
+
+::selection {
+  background: var(--color-glow-500);
+  color: #fff;
+}
+
+/* Neon tube lettering — the halo does the work, not the fill. */
+@utility neon {
+  color: var(--color-glow-300);
+  text-shadow:
+    0 0 6px rgba(201, 160, 255, 0.9),
+    0 0 22px rgba(168, 108, 245, 0.75),
+    0 0 48px rgba(123, 63, 212, 0.55);
+}
+
+@utility neon-warm {
+  color: var(--color-sign);
+  text-shadow:
+    0 0 6px rgba(255, 203, 107, 0.9),
+    0 0 24px rgba(255, 163, 60, 0.6);
+}
+
+/* Lit glass: a translucent panel with a single bright edge along the top. */
+@utility panel {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.07),
+    rgba(255, 255, 255, 0.02)
+  );
+  border: 1px solid rgba(217, 188, 255, 0.16);
+  border-radius: 1.5rem;
+  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+@utility panel-lift {
+  transition:
+    border-color 0.4s ease,
+    box-shadow 0.4s ease,
+    transform 0.4s ease;
+  &:hover {
+    transform: translateY(-5px);
+    border-color: rgba(201, 160, 255, 0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 24px 60px -30px rgba(168, 108, 245, 0.9);
+  }
+}
+
+@utility hairline-glow {
+  border-top: 1px solid rgba(217, 188, 255, 0.16);
+}
+
+@utility overline {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--color-glow-400);
+}
+
+/* The tired flicker every real neon sign has. */
+@keyframes flicker {
+  0%,
+  92%,
+  100% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.35;
+  }
+  94% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0.55;
+  }
+  97% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.06);
+  }
+}
+
+@utility flicker {
+  animation: flicker 7s linear infinite;
+}
+
+@utility pulse-glow {
+  animation: pulse-glow 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
