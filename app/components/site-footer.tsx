@@ -18,7 +18,7 @@ export function SiteFooter() {
             Cafe
           </p>
           <p className="font-serif mt-6 max-w-sm text-2xl italic text-neon">
-            Housemade everything, in a building that is not ours yet.
+            Housemade everything
           </p>
           <CatMark size={48} className="mt-8 text-grape" />
         </div>
