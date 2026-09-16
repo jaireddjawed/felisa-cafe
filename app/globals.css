@@ -1,26 +1,123 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── Felisa Cafe — "Garden Press" ───────────────────────────────────────────
+   Every drink photo is shot outdoors: succulents, grass, open sky. This
+   direction builds the shop around that — warm paper, botanical line art,
+   and arched frames, set like a small-press seed catalogue.                 */
+
+@theme {
+  --color-paper-50: #fdfaf4;
+  --color-paper-100: #f7f1e6;
+  --color-paper-200: #ece3d3;
+  --color-paper-300: #dccfb9;
+
+  --color-plum-400: #9b7fc4;
+  --color-plum-500: #7a5aa8;
+  --color-plum-600: #634489;
+  --color-plum-800: #42305c;
+
+  --color-sage: #8b9e6e;
+  --color-sky: #8fb8de;
+  --color-clay: #c08a6a;
+
+  --color-ink: #3b3049;
+  --color-quiet: #7b6f88;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-felisa-display), ui-serif, Georgia, serif;
+  --font-body: var(--font-felisa-body), ui-sans-serif, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-paper-50);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  /* Laid paper: a fine horizontal tooth you only notice on large flats. */
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(66, 48, 92, 0.022) 0px,
+    rgba(66, 48, 92, 0.022) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+
+::selection {
+  background: var(--color-sage);
+  color: var(--color-paper-50);
+}
+
+/* The arched top of a garden gate — used on every framed image. */
+@utility arch {
+  border-radius: 999px 999px 0.5rem 0.5rem;
+}
+
+/* Catalogue label: letter-spaced, small, and always above a rule. */
+@utility label-fine {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-plum-500);
+}
+
+@utility rule-fine {
+  border-top: 1px solid var(--color-paper-300);
+}
+
+/* A pressed-flower frame: thin keyline inset from the edge of the card. */
+@utility pressed {
+  position: relative;
+  background: var(--color-paper-100);
+  border: 1px solid var(--color-paper-300);
+  border-radius: 0.5rem;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0.45rem;
+    border: 1px solid rgba(155, 127, 196, 0.28);
+    border-radius: 0.25rem;
+    pointer-events: none;
+  }
+}
+
+@utility drop-cap {
+  &::first-letter {
+    float: left;
+    font-family: var(--font-display);
+    font-size: 3.6em;
+    line-height: 0.82;
+    padding-right: 0.08em;
+    color: var(--color-plum-600);
+  }
+}
+
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-1.5deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+
+@utility sway {
+  transform-origin: bottom center;
+  animation: sway 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
