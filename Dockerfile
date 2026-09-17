@@ -5,6 +5,9 @@
 # invalidate the (slow) dependency install layer.
 FROM node:22-alpine AS deps
 WORKDIR /app
+# pocketbase-typegen (devDependency) pulls in better-sqlite3, a native
+# module node-gyp has to compile from source on Alpine.
+RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
 RUN npm ci
 
