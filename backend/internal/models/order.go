@@ -23,6 +23,16 @@ type Order struct {
 	Created       string
 }
 
+func (o *Order) ApplyToRecord(record *core.Record) {
+	record.Set("status", o.Status)
+	record.Set("customer_name", o.CustomerName)
+	record.Set("customer_email", o.CustomerEmail)
+	record.Set("customer_phone", o.CustomerPhone)
+	record.Set("notes", o.Notes)
+	record.Set("items", o.Items)
+	record.Set("subtotal", o.Subtotal)
+}
+
 func OrderFromRecord(record *core.Record) (*Order, error) {
 	var items []OrderItem
 	if err := record.UnmarshalJSONField("items", &items); err != nil {

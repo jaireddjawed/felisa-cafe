@@ -1,20 +1,33 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+
+	validation "github.com/pocketbase/ozzo-validation/v4"
 
 	"felisa-cafe/backend/internal/models"
 	"felisa-cafe/backend/internal/views"
 )
 
+// Format-only check. ozzo's is.Email wraps govalidator.IsExistingEmail, which
+// does a live MX/DNS lookup per call — too brittle to run on every checkout.
+var emailFormat = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+
 type checkoutItemInput struct {
 	Slug    string   `json:"slug"`
 	Qty     int      `json:"qty"`
 	Options []string `json:"options"`
+}
+
+func (i checkoutItemInput) Validate() error {
+	return validation.ValidateStruct(&i,
+		validation.Field(&i.Slug, validation.Required),
+		validation.Field(&i.Qty, validation.Required, validation.Min(1)),
+	)
 }
 
 type checkoutInput struct {
@@ -23,6 +36,16 @@ type checkoutInput struct {
 	CustomerPhone string              `json:"customerPhone"`
 	Notes         string              `json:"notes"`
 	Items         []checkoutItemInput `json:"items"`
+}
+
+// Validate cascades into each Items element automatically, since
+// checkoutItemInput implements Validatable.
+func (in checkoutInput) Validate() error {
+	return validation.ValidateStruct(&in,
+		validation.Field(&in.CustomerName, validation.Required),
+		validation.Field(&in.CustomerEmail, validation.Required, validation.Match(emailFormat)),
+		validation.Field(&in.Items, validation.Required),
+	)
 }
 
 // Checkout handles POST /api/checkout. It re-prices every line item from the
@@ -35,11 +58,8 @@ func Checkout(e *core.RequestEvent) error {
 		return e.BadRequestError("invalid checkout payload", err)
 	}
 
-	if input.CustomerName == "" || input.CustomerEmail == "" {
-		return e.BadRequestError("customerName and customerEmail are required", nil)
-	}
-	if len(input.Items) == 0 {
-		return e.BadRequestError("order must include at least one item", nil)
+	if err := input.Validate(); err != nil {
+		return e.BadRequestError("invalid checkout payload", err)
 	}
 
 	collection, err := e.App.FindCollectionByNameOrId("orders")
@@ -51,13 +71,9 @@ func Checkout(e *core.RequestEvent) error {
 	var subtotal float64
 
 	for _, in := range input.Items {
-		if in.Qty <= 0 {
-			return e.BadRequestError("item quantity must be positive", nil)
-		}
-
 		product, err := e.App.FindFirstRecordByFilter("products", "slug = {:slug}", dbx.Params{"slug": in.Slug})
 		if err != nil {
-			return e.BadRequestError(fmt.Sprintf("unknown product: %s", in.Slug), err)
+			return e.BadRequestError("unknown product: "+in.Slug, err)
 		}
 
 		unitPrice := product.GetFloat("price")
@@ -71,23 +87,25 @@ func Checkout(e *core.RequestEvent) error {
 		subtotal += unitPrice * float64(in.Qty)
 	}
 
+	order := &models.Order{
+		Status:        "pending",
+		CustomerName:  input.CustomerName,
+		CustomerEmail: input.CustomerEmail,
+		CustomerPhone: input.CustomerPhone,
+		Notes:         input.Notes,
+		Items:         items,
+		Subtotal:      subtotal,
+	}
+
 	record := core.NewRecord(collection)
-	record.Set("status", "pending")
-	record.Set("customer_name", input.CustomerName)
-	record.Set("customer_email", input.CustomerEmail)
-	record.Set("customer_phone", input.CustomerPhone)
-	record.Set("notes", input.Notes)
-	record.Set("items", items)
-	record.Set("subtotal", subtotal)
+	order.ApplyToRecord(record)
 
 	if err := e.App.Save(record); err != nil {
 		return e.BadRequestError("failed to place order", err)
 	}
 
-	order, err := models.OrderFromRecord(record)
-	if err != nil {
-		return e.InternalServerError("failed to read order", err)
-	}
+	order.ID = record.Id
+	order.Created = record.GetDateTime("created").String()
 
 	return e.JSON(http.StatusCreated, views.NewOrderView(order))
 }

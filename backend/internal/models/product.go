@@ -19,6 +19,21 @@ type Product struct {
 	Badge       string
 }
 
+func (p *Product) ApplyToRecord(record *core.Record) {
+	record.Set("slug", p.Slug)
+	record.Set("name", p.Name)
+	record.Set("category", p.Category)
+	record.Set("price", p.Price)
+	record.Set("tagline", p.Tagline)
+	record.Set("description", p.Description)
+	record.Set("ingredients", p.Ingredients)
+	record.Set("size", p.Size)
+	record.Set("bases", p.Bases)
+	record.Set("pour_top", p.PourTop)
+	record.Set("pour_bottom", p.PourBottom)
+	record.Set("badge", p.Badge)
+}
+
 func ProductFromRecord(record *core.Record) (*Product, error) {
 	var ingredients []string
 	if err := record.UnmarshalJSONField("ingredients", &ingredients); err != nil {
