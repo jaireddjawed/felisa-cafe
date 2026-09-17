@@ -6,10 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "backend:dev": "cd backend && go run . serve --dir ./pb_data",
+    "typegen": "pocketbase-typegen --db backend/pb_data/data.db --out lib/pocketbase-types.ts"
   },
   "dependencies": {
     "next": "16.3.5",
+    "pocketbase": "^0.28.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -20,6 +23,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "pocketbase-typegen": "^1.5.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
