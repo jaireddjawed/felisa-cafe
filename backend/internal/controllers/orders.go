@@ -2,58 +2,20 @@ package controllers
 
 import (
 	"net/http"
-	"regexp"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 
-	validation "github.com/pocketbase/ozzo-validation/v4"
-
 	"felisa-cafe/backend/internal/models"
 	"felisa-cafe/backend/internal/views"
 )
-
-// Format-only check. ozzo's is.Email wraps govalidator.IsExistingEmail, which
-// does a live MX/DNS lookup per call — too brittle to run on every checkout.
-var emailFormat = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
-
-type checkoutItemInput struct {
-	Slug    string   `json:"slug"`
-	Qty     int      `json:"qty"`
-	Options []string `json:"options"`
-}
-
-func (i checkoutItemInput) Validate() error {
-	return validation.ValidateStruct(&i,
-		validation.Field(&i.Slug, validation.Required),
-		validation.Field(&i.Qty, validation.Required, validation.Min(1)),
-	)
-}
-
-type checkoutInput struct {
-	CustomerName  string              `json:"customerName"`
-	CustomerEmail string              `json:"customerEmail"`
-	CustomerPhone string              `json:"customerPhone"`
-	Notes         string              `json:"notes"`
-	Items         []checkoutItemInput `json:"items"`
-}
-
-// Validate cascades into each Items element automatically, since
-// checkoutItemInput implements Validatable.
-func (in checkoutInput) Validate() error {
-	return validation.ValidateStruct(&in,
-		validation.Field(&in.CustomerName, validation.Required),
-		validation.Field(&in.CustomerEmail, validation.Required, validation.Match(emailFormat)),
-		validation.Field(&in.Items, validation.Required),
-	)
-}
 
 // Checkout handles POST /api/checkout. It re-prices every line item from the
 // products collection rather than trusting client-sent prices, then writes
 // the order directly via app.Save — which is why the "orders" collection has
 // no public create rule of its own.
 func Checkout(e *core.RequestEvent) error {
-	var input checkoutInput
+	var input views.CheckoutInput
 	if err := e.BindBody(&input); err != nil {
 		return e.BadRequestError("invalid checkout payload", err)
 	}
@@ -88,7 +50,7 @@ func Checkout(e *core.RequestEvent) error {
 	}
 
 	order := &models.Order{
-		Status:        "pending",
+		Status:        models.OrderStatusPending,
 		CustomerName:  input.CustomerName,
 		CustomerEmail: input.CustomerEmail,
 		CustomerPhone: input.CustomerPhone,

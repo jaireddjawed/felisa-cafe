@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 import { useCart } from "@/lib/cart";
 import { CatFace, GirlDoodle, Sparkle } from "./doodles";
 
@@ -10,7 +11,7 @@ const NAV = [
   { href: "/about", label: "Our Story" },
 ];
 
-export function SiteHeader() {
+export function SiteHeader({ accountSlot }: { accountSlot?: ReactNode }) {
   const { count, open } = useCart();
   const pathname = usePathname();
 
@@ -67,6 +68,8 @@ export function SiteHeader() {
               </span>
             )}
           </button>
+
+          {accountSlot}
         </nav>
       </div>
     </header>

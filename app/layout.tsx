@@ -4,6 +4,7 @@ import "./globals.css";
 import { SiteHeader } from "./components/site-header";
 import { SiteFooter } from "./components/site-footer";
 import { CartDrawer } from "./components/cart-drawer";
+import { AccountMenu } from "./components/account-menu";
 
 const marker = Gloria_Hallelujah({
   variable: "--font-felisa-marker",
@@ -41,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${marker.variable} ${hand.variable} ${body.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <SiteHeader />
+        <SiteHeader accountSlot={<AccountMenu />} />
         <main className="flex-1">{children}</main>
         <SiteFooter />
         <CartDrawer />

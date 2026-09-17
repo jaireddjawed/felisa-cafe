@@ -2,12 +2,22 @@ package models
 
 import "github.com/pocketbase/pocketbase/core"
 
+// ProductCategory mirrors the "category" select field's options on the
+// products collection (see internal/migrations/1700000000_products_collection.go).
+type ProductCategory string
+
+const (
+	ProductCategorySignature ProductCategory = "signature"
+	ProductCategoryPantry    ProductCategory = "pantry"
+	ProductCategoryMerch     ProductCategory = "merch"
+)
+
 // Product is the domain representation of a "products" record.
 type Product struct {
 	ID          string
 	Slug        string
 	Name        string
-	Category    string
+	Category    ProductCategory
 	Price       float64
 	Tagline     string
 	Description string
@@ -22,7 +32,7 @@ type Product struct {
 func (p *Product) ApplyToRecord(record *core.Record) {
 	record.Set("slug", p.Slug)
 	record.Set("name", p.Name)
-	record.Set("category", p.Category)
+	record.Set("category", string(p.Category))
 	record.Set("price", p.Price)
 	record.Set("tagline", p.Tagline)
 	record.Set("description", p.Description)
@@ -49,7 +59,7 @@ func ProductFromRecord(record *core.Record) (*Product, error) {
 		ID:          record.Id,
 		Slug:        record.GetString("slug"),
 		Name:        record.GetString("name"),
-		Category:    record.GetString("category"),
+		Category:    ProductCategory(record.GetString("category")),
 		Price:       record.GetFloat("price"),
 		Tagline:     record.GetString("tagline"),
 		Description: record.GetString("description"),
