@@ -15,14 +15,14 @@ type OrderItemView struct {
 }
 
 type OrderView struct {
-	ID                string          `json:"id"`
-	Status            string          `json:"status"`
-	CustomerName      string          `json:"customerName"`
-	CustomerEmail     string          `json:"customerEmail"`
-	Items             []OrderItemView `json:"items"`
-	Subtotal          float64         `json:"subtotal"`
-	SubtotalFormatted string          `json:"subtotalFormatted"`
-	Created           string          `json:"created"`
+	ID                string             `json:"id"`
+	Status            models.OrderStatus `json:"status"`
+	CustomerName      string             `json:"customerName"`
+	CustomerEmail     string             `json:"customerEmail"`
+	Items             []OrderItemView    `json:"items"`
+	Subtotal          float64            `json:"subtotal"`
+	SubtotalFormatted string             `json:"subtotalFormatted"`
+	Created           string             `json:"created"`
 }
 
 func NewOrderView(o *models.Order) *OrderView {

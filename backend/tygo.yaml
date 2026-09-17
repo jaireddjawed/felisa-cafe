@@ -1,0 +1,25 @@
+# Generates lib/api-types.ts from internal/views — the wire types for the
+# custom controllers in internal/controllers. Run via `npm run typegen:api`
+# (from repo root) or `go tool tygo generate` (from backend/).
+#
+# Unlike lib/pocketbase-types.ts (generated from the live DB schema by
+# pocketbase-typegen), these types aren't derived from PocketBase — they're
+# the request/response shapes the Go controllers actually read and write.
+enum_style: "union"
+
+packages:
+  - path: "felisa-cafe/backend/internal/views"
+    output_path: "../lib/api-types.ts"
+    # ProductCategory/OrderStatus live in internal/models, a package tygo
+    # isn't pointed at, so map them to the union types pocketbase-typegen
+    # already derives from the same select fields' live DB options, rather
+    # than re-declaring the value list a third time.
+    type_mappings:
+      models.ProductCategory: 'import("./pocketbase-types").ProductsCategoryOptions'
+      models.OrderStatus: 'import("./pocketbase-types").OrdersStatusOptions'
+    frontmatter: |
+      /**
+       * GENERATED FILE — do not edit by hand.
+       * Source: backend/internal/views/*.go
+       * Regenerate with `npm run typegen:api`.
+       */
