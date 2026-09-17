@@ -10,19 +10,19 @@ import (
 // the Model so the wire contract (camelCase, computed fields) can evolve
 // without touching how products are read from PocketBase.
 type ProductView struct {
-	ID             string   `json:"id"`
-	Slug           string   `json:"slug"`
-	Name           string   `json:"name"`
-	Category       string   `json:"category"`
-	Price          float64  `json:"price"`
-	PriceFormatted string   `json:"priceFormatted"`
-	Tagline        string   `json:"tagline"`
-	Description    string   `json:"description"`
-	Ingredients    []string `json:"ingredients"`
-	Size           string   `json:"size,omitempty"`
-	Bases          []string `json:"bases,omitempty"`
-	Pour           PourView `json:"pour"`
-	Badge          string   `json:"badge,omitempty"`
+	ID             string                 `json:"id"`
+	Slug           string                 `json:"slug"`
+	Name           string                 `json:"name"`
+	Category       models.ProductCategory `json:"category"`
+	Price          float64                `json:"price"`
+	PriceFormatted string                 `json:"priceFormatted"`
+	Tagline        string                 `json:"tagline"`
+	Description    string                 `json:"description"`
+	Ingredients    []string               `json:"ingredients"`
+	Size           string                 `json:"size,omitempty"`
+	Bases          []string               `json:"bases,omitempty"`
+	Pour           PourView               `json:"pour"`
+	Badge          string                 `json:"badge,omitempty"`
 }
 
 type PourView struct {

@@ -2,6 +2,17 @@ package models
 
 import "github.com/pocketbase/pocketbase/core"
 
+// OrderStatus mirrors the "status" select field's options on the orders
+// collection (see internal/migrations/1700000001_orders_collection.go).
+type OrderStatus string
+
+const (
+	OrderStatusPending   OrderStatus = "pending"
+	OrderStatusConfirmed OrderStatus = "confirmed"
+	OrderStatusCompleted OrderStatus = "completed"
+	OrderStatusCancelled OrderStatus = "cancelled"
+)
+
 type OrderItem struct {
 	Slug      string   `json:"slug"`
 	Name      string   `json:"name"`
@@ -13,7 +24,7 @@ type OrderItem struct {
 // Order is the domain representation of an "orders" record.
 type Order struct {
 	ID            string
-	Status        string
+	Status        OrderStatus
 	CustomerName  string
 	CustomerEmail string
 	CustomerPhone string
@@ -24,7 +35,7 @@ type Order struct {
 }
 
 func (o *Order) ApplyToRecord(record *core.Record) {
-	record.Set("status", o.Status)
+	record.Set("status", string(o.Status))
 	record.Set("customer_name", o.CustomerName)
 	record.Set("customer_email", o.CustomerEmail)
 	record.Set("customer_phone", o.CustomerPhone)
@@ -41,7 +52,7 @@ func OrderFromRecord(record *core.Record) (*Order, error) {
 
 	return &Order{
 		ID:            record.Id,
-		Status:        record.GetString("status"),
+		Status:        OrderStatus(record.GetString("status")),
 		CustomerName:  record.GetString("customer_name"),
 		CustomerEmail: record.GetString("customer_email"),
 		CustomerPhone: record.GetString("customer_phone"),
