@@ -1,0 +1,25 @@
+# Backend (PocketBase) — deploy from this directory: `fly deploy`
+# First run:
+#   fly apps create felisa-cafe-backend
+#   fly volumes create felisa_cafe_pb_data --region iad --size 1
+app = "felisa-cafe-backend"
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = 8090
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # SQLite lives on a single attached volume, so this stays a single
+  # always-on machine rather than scaling to zero or multiple regions.
+  min_machines_running = 1
+
+[[mounts]]
+  source = "felisa_cafe_pb_data"
+  destination = "/app/pb_data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

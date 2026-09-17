@@ -15,6 +15,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Disables the Next.js telemetry ping during the build in CI/Docker.
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* vars are inlined at build time, so the backend URL has to be
+# passed in as a build arg (see fly.toml [build.args]) rather than set at runtime.
+ARG NEXT_PUBLIC_PB_URL
+ENV NEXT_PUBLIC_PB_URL=$NEXT_PUBLIC_PB_URL
 RUN npm run build
 
 # ── runner ────────────────────────────────────────────────────────────────
