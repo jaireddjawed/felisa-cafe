@@ -1,0 +1,20 @@
+# Frontend (Next.js) — deploy from the repo root: `fly deploy`
+# First run: `fly launch --no-deploy` to create the app, or `fly apps create felisa-cafe`.
+app = "felisa-cafe"
+primary_region = "iad"
+
+[build]
+  [build.args]
+    # Point this at the backend app's Fly URL once it's deployed.
+    NEXT_PUBLIC_PB_URL = "https://felisa-cafe-backend.fly.dev"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
