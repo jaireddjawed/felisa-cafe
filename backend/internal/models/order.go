@@ -21,44 +21,32 @@ type OrderItem struct {
 	Options   []string `json:"options"`
 }
 
-// Order is the domain representation of an "orders" record.
+// Order is the domain representation of an "orders" record. The `column`
+// tags are read by applyToRecord/scanRecord (see record.go) to move data
+// to and from the underlying PocketBase record. Created has no column tag:
+// it comes from GetDateTime, which doesn't fit the plain
+// Set/GetString/GetFloat/UnmarshalJSONField dispatch scanRecord does for
+// tagged fields.
 type Order struct {
-	ID            string
-	Status        OrderStatus
-	CustomerName  string
-	CustomerEmail string
-	CustomerPhone string
-	Notes         string
-	Items         []OrderItem
-	Subtotal      float64
+	ID            string      `column:"id,primary_key"`
+	Status        OrderStatus `column:"status"`
+	CustomerName  string      `column:"customer_name"`
+	CustomerEmail string      `column:"customer_email"`
+	CustomerPhone string      `column:"customer_phone"`
+	Notes         string      `column:"notes"`
+	Items         []OrderItem `column:"items"`
+	Subtotal      float64     `column:"subtotal"`
 	Created       string
 }
 
 func (o *Order) ApplyToRecord(record *core.Record) {
-	record.Set("status", string(o.Status))
-	record.Set("customer_name", o.CustomerName)
-	record.Set("customer_email", o.CustomerEmail)
-	record.Set("customer_phone", o.CustomerPhone)
-	record.Set("notes", o.Notes)
-	record.Set("items", o.Items)
-	record.Set("subtotal", o.Subtotal)
+	applyToRecord(record, o)
 }
 
 func OrderFromRecord(record *core.Record) (*Order, error) {
-	var items []OrderItem
-	if err := record.UnmarshalJSONField("items", &items); err != nil {
+	o := &Order{Created: record.GetDateTime("created").String()}
+	if err := scanRecord(record, o); err != nil {
 		return nil, err
 	}
-
-	return &Order{
-		ID:            record.Id,
-		Status:        OrderStatus(record.GetString("status")),
-		CustomerName:  record.GetString("customer_name"),
-		CustomerEmail: record.GetString("customer_email"),
-		CustomerPhone: record.GetString("customer_phone"),
-		Notes:         record.GetString("notes"),
-		Items:         items,
-		Subtotal:      record.GetFloat("subtotal"),
-		Created:       record.GetDateTime("created").String(),
-	}, nil
+	return o, nil
 }

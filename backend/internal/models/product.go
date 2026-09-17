@@ -12,62 +12,33 @@ const (
 	ProductCategoryMerch     ProductCategory = "merch"
 )
 
-// Product is the domain representation of a "products" record.
+// Product is the domain representation of a "products" record. The
+// `column` tags are read by applyToRecord/scanRecord (see record.go) to
+// move data to and from the underlying PocketBase record.
 type Product struct {
-	ID          string
-	Slug        string
-	Name        string
-	Category    ProductCategory
-	Price       float64
-	Tagline     string
-	Description string
-	Ingredients []string
-	Size        string
-	Bases       []string
-	PourTop     string
-	PourBottom  string
-	Badge       string
+	ID          string          `column:"id,primary_key"`
+	Slug        string          `column:"slug"`
+	Name        string          `column:"name"`
+	Category    ProductCategory `column:"category"`
+	Price       float64         `column:"price"`
+	Tagline     string          `column:"tagline"`
+	Description string          `column:"description"`
+	Ingredients []string        `column:"ingredients"`
+	Size        string          `column:"size"`
+	Bases       []string        `column:"bases"`
+	PourTop     string          `column:"pour_top"`
+	PourBottom  string          `column:"pour_bottom"`
+	Badge       string          `column:"badge"`
 }
 
 func (p *Product) ApplyToRecord(record *core.Record) {
-	record.Set("slug", p.Slug)
-	record.Set("name", p.Name)
-	record.Set("category", string(p.Category))
-	record.Set("price", p.Price)
-	record.Set("tagline", p.Tagline)
-	record.Set("description", p.Description)
-	record.Set("ingredients", p.Ingredients)
-	record.Set("size", p.Size)
-	record.Set("bases", p.Bases)
-	record.Set("pour_top", p.PourTop)
-	record.Set("pour_bottom", p.PourBottom)
-	record.Set("badge", p.Badge)
+	applyToRecord(record, p)
 }
 
 func ProductFromRecord(record *core.Record) (*Product, error) {
-	var ingredients []string
-	if err := record.UnmarshalJSONField("ingredients", &ingredients); err != nil {
+	p := &Product{}
+	if err := scanRecord(record, p); err != nil {
 		return nil, err
 	}
-
-	var bases []string
-	if err := record.UnmarshalJSONField("bases", &bases); err != nil {
-		return nil, err
-	}
-
-	return &Product{
-		ID:          record.Id,
-		Slug:        record.GetString("slug"),
-		Name:        record.GetString("name"),
-		Category:    ProductCategory(record.GetString("category")),
-		Price:       record.GetFloat("price"),
-		Tagline:     record.GetString("tagline"),
-		Description: record.GetString("description"),
-		Ingredients: ingredients,
-		Size:        record.GetString("size"),
-		Bases:       bases,
-		PourTop:     record.GetString("pour_top"),
-		PourBottom:  record.GetString("pour_bottom"),
-		Badge:       record.GetString("badge"),
-	}, nil
+	return p, nil
 }
