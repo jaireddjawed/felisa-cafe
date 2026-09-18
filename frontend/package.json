@@ -7,10 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "backend:dev": "cd backend && go run . serve --dir ./pb_data",
+    "backend:dev": "cd ../backend && go run . serve --dir ./pb_data",
     "typegen": "npm run typegen:db && npm run typegen:api",
-    "typegen:db": "pocketbase-typegen --db backend/pb_data/data.db --out lib/pocketbase-types.ts",
-    "typegen:api": "cd backend && go tool tygo generate"
+    "typegen:db": "pocketbase-typegen --db ../backend/pb_data/data.db --out lib/pocketbase-types.ts",
+    "typegen:api": "cd ../backend && go tool tygo generate"
   },
   "dependencies": {
     "next": "16.3.5",

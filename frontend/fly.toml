@@ -1,4 +1,4 @@
-# Frontend (Next.js) — deploy from the repo root: `fly deploy`
+# Frontend (Next.js) — deploy from frontend/: `fly deploy`
 # First run: `fly launch --no-deploy` to create the app, or `fly apps create felisa-cafe`.
 app = "felisa-cafe"
 primary_region = "iad"
