@@ -6,36 +6,133 @@
  */
 
 //////////
-// source: checkout.go
+// source: views.go
+/*
+Package views holds the JSON wire types of the storefront API: request
+inputs (with validation) and response shapes. It is also the source for
+frontend/lib/api-types.ts (see backend/tygo.yaml). It converts domain
+models and service results to JSON, and never touches persistence or
+providers.
+*/
 
 /**
- * CheckoutItemInput and CheckoutInput are the wire shapes the frontend posts
- * to POST /api/checkout — the request-side counterpart to ProductView and
- * OrderView. Kept here (rather than in the controllers package) so tygo can
- * generate lib/api-types.ts from this one package; see backend/tygo.yaml.
+ * MoneyView is an amount in minor units (cents) plus a display string.
  */
-export interface CheckoutItemInput {
-  slug: string;
-  qty: number /* int */;
-  options: string[];
+export interface MoneyView {
+  amount: number /* int64 */;
+  currency: string;
+  formatted: string;
 }
-export interface CheckoutInput {
-  customerName: string;
-  customerEmail: string;
-  customerPhone?: string;
-  notes?: string;
-  items: CheckoutItemInput[];
-}
-
-//////////
-// source: order.go
-
-export interface OrderItemView {
+export interface ProductView {
+  id: string;
   slug: string;
   name: string;
-  unitPrice: number /* float64 */;
-  qty: number /* int */;
-  options: string[];
+  category: import("./pocketbase-types").ProductsCategoryOptions;
+  description: string;
+  tagline: string;
+  ingredients: string[];
+  size?: string;
+  pour: PourView;
+  badge?: string;
+  available: boolean;
+  fromPrice?: MoneyView;
+  variations: VariationView[];
+  modifierLists: ModifierListView[];
+}
+export interface PourView {
+  top: string;
+  bottom: string;
+}
+/**
+ * VariationView.ID is the Square variation ID the cart API expects.
+ */
+export interface VariationView {
+  id: string;
+  name: string;
+  price: MoneyView;
+  available: boolean;
+}
+export interface ModifierListView {
+  id: string;
+  name: string;
+  minSelected: number /* int64 */;
+  maxSelected: number /* int64 */; // 0 = no maximum
+  modifiers: ModifierView[];
+}
+export interface ModifierView {
+  id: string;
+  name: string;
+  price: MoneyView;
+}
+/**
+ * AddCartItemInput adds a product variation with chosen modifiers. Only IDs
+ * and a quantity are accepted: prices always come from the server.
+ */
+export interface AddCartItemInput {
+  variationId: string;
+  modifierIds: string[];
+  quantity: number /* int64 */;
+  note?: string;
+}
+/**
+ * UpdateCartItemInput sets a line's quantity; 0 removes the line.
+ */
+export interface UpdateCartItemInput {
+  quantity: number /* int64 */;
+}
+export interface CartView {
+  /**
+   * CartToken is set when the server has just issued a guest cart token.
+   * Send it back as the X-Cart-Token header on later cart and checkout calls.
+   */
+  cartToken?: string;
+  lines: CartLineView[];
+  subtotal: MoneyView;
+  itemCount: number /* int64 */;
+  /**
+   * Valid is false if any line has a problem; checkout will be refused.
+   */
+  valid: boolean;
+}
+export interface CartLineView {
+  lineId: string;
+  productSlug: string;
+  productName: string;
+  variationId: string;
+  variationName: string;
+  modifiers: ModifierView[];
+  quantity: number /* int64 */;
+  note?: string;
+  unitPrice: MoneyView;
+  total: MoneyView;
+  problem?: string;
+}
+export interface ETAView {
+  estimatedReadyAt: string /* RFC 3339 */;
+}
+/**
+ * CheckoutInput starts checkout for the caller's current cart. Items are not
+ * sent: the server-side cart is the order. Send an Idempotency-Key header
+ * (e.g. a UUID generated when the checkout form is shown) and reuse it on
+ * retries. Signed-in customers may omit fields saved on their profile.
+ */
+export interface CheckoutInput {
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  notes?: string;
+}
+export interface CheckoutView {
+  orderId: string;
+  checkoutUrl: string;
+  /**
+   * OrderToken authorizes a guest to view this order: send it as the
+   * X-Order-Token header to GET /api/orders/{id}. Store it client-side;
+   * it cannot be recovered.
+   */
+  orderToken?: string;
+  estimatedReadyAt: string /* RFC 3339 */;
+  total: MoneyView;
 }
 export interface OrderView {
   id: string;
@@ -43,35 +140,30 @@ export interface OrderView {
   customerName: string;
   customerEmail: string;
   items: OrderItemView[];
-  subtotal: number /* float64 */;
-  subtotalFormatted: string;
-  created: string;
+  subtotal: MoneyView;
+  tax: MoneyView;
+  total: MoneyView;
+  estimatedReadyAt?: string /* RFC 3339 */;
+  paidAt?: string /* RFC 3339 */;
+  completedAt?: string /* RFC 3339 */;
+  created: string /* RFC 3339 */;
+  /**
+   * CheckoutURL is included while payment is pending, so an abandoned
+   * checkout can be resumed.
+   */
+  checkoutUrl?: string;
 }
-
-//////////
-// source: product.go
-
-/**
- * ProductView is the JSON shape returned to the frontend, kept separate from
- * the Model so the wire contract (camelCase, computed fields) can evolve
- * without touching how products are read from PocketBase.
- */
-export interface ProductView {
-  id: string;
-  slug: string;
+export interface OrderItemView {
+  productName: string;
+  productSlug?: string;
+  variationName?: string;
+  quantity: number /* int64 */;
+  unitPrice: MoneyView;
+  total: MoneyView;
+  modifiers: OrderModifierView[];
+  note?: string;
+}
+export interface OrderModifierView {
   name: string;
-  category: import("./pocketbase-types").ProductsCategoryOptions;
-  price: number /* float64 */;
-  priceFormatted: string;
-  tagline: string;
-  description: string;
-  ingredients: string[];
-  size?: string;
-  bases?: string[];
-  pour: PourView;
-  badge?: string;
-}
-export interface PourView {
-  top: string;
-  bottom: string;
+  price: MoneyView;
 }

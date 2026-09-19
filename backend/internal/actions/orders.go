@@ -1,76 +1,117 @@
 package actions
 
 import (
+	"errors"
+	"io"
 	"net/http"
 
-	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 
 	"felisa-cafe/backend/internal/models"
+	"felisa-cafe/backend/internal/providers/payments"
+	"felisa-cafe/backend/internal/providers/payments/square"
+	"felisa-cafe/backend/internal/services/checkout"
+	"felisa-cafe/backend/internal/services/orders"
 	"felisa-cafe/backend/internal/views"
 )
 
-// Checkout handles POST /api/checkout. It re-prices every line item from the
-// products collection rather than trusting client-sent prices, then writes
-// the order directly via app.Save — which is why the "orders" collection has
-// no public create rule of its own.
-func Checkout(e *core.RequestEvent) error {
-	var input views.CheckoutInput
-	if err := e.BindBody(&input); err != nil {
-		return e.BadRequestError("invalid checkout payload", err)
+// StartCheckout handles POST /api/checkout. Requires an Idempotency-Key header;
+// reuse it when retrying so a retry can never create a second order.
+func (h *Handlers) StartCheckout(e *core.RequestEvent) error {
+	var in views.CheckoutInput
+	if err := e.BindBody(&in); err != nil {
+		return e.BadRequestError("Invalid request body.", err)
+	}
+	user := userID(e)
+	if err := in.Validate(user != ""); err != nil {
+		return e.BadRequestError("Please check your details.", err)
+	}
+	key := e.Request.Header.Get(IdempotencyHeader)
+	if key == "" {
+		return e.BadRequestError("Missing Idempotency-Key header.", nil)
 	}
 
-	if err := input.Validate(); err != nil {
-		return e.BadRequestError("invalid checkout payload", err)
+	owner, _ := cartOwner(e, false)
+	if owner.IsZero() {
+		return h.fail(e, checkout.ErrEmptyCart)
 	}
-
-	items := make([]models.OrderItem, 0, len(input.Items))
-	var subtotal float64
-
-	for _, in := range input.Items {
-		record, err := e.App.FindFirstRecordByFilter("products", "slug = {:slug}", dbx.Params{"slug": in.Slug})
-		if err != nil {
-			return e.BadRequestError("unknown product: "+in.Slug, err)
-		}
-
-		product, err := models.ProductFromRecord(record)
-		if err != nil {
-			return e.InternalServerError("failed to read product", err)
-		}
-
-		items = append(items, models.OrderItem{
-			Slug:      in.Slug,
-			Name:      product.Name,
-			UnitPrice: product.Price,
-			Qty:       in.Qty,
-			Options:   in.Options,
-		})
-		subtotal += product.Price * float64(in.Qty)
-	}
-
-	order := &models.Order{
-		Status:        models.OrderStatusPending,
-		CustomerName:  input.CustomerName,
-		CustomerEmail: input.CustomerEmail,
-		CustomerPhone: input.CustomerPhone,
-		Notes:         input.Notes,
-		Items:         items,
-		Subtotal:      subtotal,
-	}
-
-	collection, err := e.App.FindCollectionByNameOrId("orders")
+	res, err := h.Checkout.Checkout(e.Request.Context(), checkout.Request{
+		Owner:  owner,
+		UserID: user,
+		Contact: models.Contact{
+			Name:  in.CustomerName,
+			Email: in.CustomerEmail,
+			Phone: in.CustomerPhone,
+		},
+		Notes:          in.Notes,
+		IdempotencyKey: key,
+	})
 	if err != nil {
-		return e.InternalServerError("orders collection not configured", err)
+		return h.fail(e, err)
 	}
-	record := core.NewRecord(collection)
-	order.ApplyToRecord(record)
+	return e.JSON(http.StatusCreated, views.CheckoutView{
+		OrderID:          string(res.Order.ID),
+		CheckoutURL:      res.CheckoutURL,
+		OrderToken:       res.AccessToken,
+		EstimatedReadyAt: res.Order.EstimatedReadyAt.UTC(),
+		Total:            views.NewMoneyView(res.Order.Total),
+	})
+}
 
-	if err := e.App.Save(record); err != nil {
-		return e.BadRequestError("failed to place order", err)
+// ListOrders handles GET /api/orders: the signed-in customer's history.
+func (h *Handlers) ListOrders(e *core.RequestEvent) error {
+	list, err := h.Orders.ListForUser(e.Request.Context(), userID(e))
+	if err != nil {
+		return h.fail(e, err)
+	}
+	out := make([]views.OrderView, len(list))
+	for i, o := range list {
+		out[i] = views.NewOrderView(o)
+	}
+	return e.JSON(http.StatusOK, out)
+}
+
+// GetOrder handles GET /api/orders/{id}. The owner (signed in) or a guest
+// presenting the order's X-Order-Token may view it; anyone else gets 404.
+func (h *Handlers) GetOrder(e *core.RequestEvent) error {
+	o, err := h.Orders.GetForViewer(e.Request.Context(), models.OrderID(e.Request.PathValue("id")), orders.Viewer{
+		UserID:      userID(e),
+		AccessToken: e.Request.Header.Get(OrderTokenHeader),
+	})
+	if err != nil {
+		return h.fail(e, err)
+	}
+	return e.JSON(http.StatusOK, views.NewOrderView(o))
+}
+
+const maxWebhookBody = 1 << 20
+
+// SquareWebhook handles POST /api/webhooks/square. The raw body is
+// verified against Square's HMAC signature before anything is parsed.
+// Non-2xx responses make Square redeliver, so only failures worth retrying
+// return 5xx.
+func (h *Handlers) SquareWebhook(e *core.RequestEvent) error {
+	if h.WebhookParser == nil {
+		return e.Error(http.StatusServiceUnavailable, "Webhooks are not configured.", nil)
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(e.Response, e.Request.Body, maxWebhookBody))
+	if err != nil {
+		return e.BadRequestError("Unreadable body.", nil)
+	}
+	ev, err := h.WebhookParser.ParseWebhook(e.Request.Context(), body, e.Request.Header.Get(square.SignatureHeader))
+	switch {
+	case errors.Is(err, payments.ErrInvalidSignature):
+		h.Log.Warn("rejected square webhook with invalid signature", "ip", e.RealIP())
+		return e.UnauthorizedError("Invalid signature.", nil)
+	case errors.Is(err, payments.ErrNotConfigured):
+		return e.Error(http.StatusServiceUnavailable, "Webhooks are not configured.", nil)
+	case err != nil:
+		return e.BadRequestError("Malformed event.", nil)
 	}
 
-	order.ID = record.Id
-	order.Created = record.GetDateTime("created").String()
-
-	return e.JSON(http.StatusCreated, views.NewOrderView(order))
+	if err := h.Webhooks.Handle(e.Request.Context(), ev); err != nil {
+		h.Log.Error("square webhook processing failed; square will redeliver", "event", ev.ID, "type", ev.Type, "error", err)
+		return e.Error(http.StatusInternalServerError, "Processing failed.", nil)
+	}
+	return e.NoContent(http.StatusOK)
 }

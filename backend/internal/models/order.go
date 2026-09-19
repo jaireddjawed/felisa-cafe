@@ -1,52 +1,125 @@
 package models
 
-import "github.com/pocketbase/pocketbase/core"
+import "time"
 
-// OrderStatus mirrors the "status" select field's options on the orders
-// collection (see internal/migrations/1700000001_orders_collection.go).
+// OrderStatus is the local projection of the Square order/payment/
+// fulfillment state. Square is authoritative; this is derived from it.
 type OrderStatus string
 
 const (
-	OrderStatusPending   OrderStatus = "pending"
-	OrderStatusConfirmed OrderStatus = "confirmed"
-	OrderStatusCompleted OrderStatus = "completed"
-	OrderStatusCancelled OrderStatus = "cancelled"
+	// OrderPendingPayment: payment link created, no verified payment yet.
+	OrderPendingPayment OrderStatus = "pending_payment"
+	// OrderPaid: Square confirms the order is fully paid; waiting in queue.
+	OrderPaid OrderStatus = "paid"
+	// OrderPreparing: staff accepted the fulfillment in Square.
+	OrderPreparing OrderStatus = "preparing"
+	// OrderReady: fulfillment marked prepared, awaiting pickup.
+	OrderReady     OrderStatus = "ready"
+	OrderCompleted OrderStatus = "completed"
+	OrderCancelled OrderStatus = "cancelled"
 )
 
-type OrderItem struct {
-	Slug      string   `json:"slug"`
-	Name      string   `json:"name"`
-	UnitPrice float64  `json:"unitPrice"`
-	Qty       int      `json:"qty"`
-	Options   []string `json:"options"`
+// InQueue reports whether the order occupies the preparation queue.
+func (s OrderStatus) InQueue() bool {
+	return s == OrderPaid || s == OrderPreparing
 }
 
-// Order is the domain representation of an "orders" record. The `column`
-// tags are read by applyToRecord/scanRecord (see record.go) to move data
-// to and from the underlying PocketBase record. Created has no column tag:
-// it comes from GetDateTime, which doesn't fit the plain
-// Set/GetString/GetFloat/UnmarshalJSONField dispatch scanRecord does for
-// tagged fields.
-type Order struct {
-	ID            string      `column:"id,primary_key"`
-	Status        OrderStatus `column:"status"`
-	CustomerName  string      `column:"customer_name"`
-	CustomerEmail string      `column:"customer_email"`
-	CustomerPhone string      `column:"customer_phone"`
-	Notes         string      `column:"notes"`
-	Items         []OrderItem `column:"items"`
-	Subtotal      float64     `column:"subtotal"`
-	Created       string
-}
-
-func (o *Order) ApplyToRecord(record *core.Record) {
-	applyToRecord(record, o)
-}
-
-func OrderFromRecord(record *core.Record) (*Order, error) {
-	o := &Order{Created: record.GetDateTime("created").String()}
-	if err := scanRecord(record, o); err != nil {
-		return nil, err
+// IsPaid reports whether a verified payment exists for the order.
+func (s OrderStatus) IsPaid() bool {
+	switch s {
+	case OrderPaid, OrderPreparing, OrderReady, OrderCompleted:
+		return true
 	}
-	return o, nil
+	return false
+}
+
+func (s OrderStatus) IsTerminal() bool {
+	return s == OrderCompleted || s == OrderCancelled
+}
+
+// Contact is who the order is for.
+type Contact struct {
+	Name  string
+	Email string
+	Phone string
+}
+
+// SquareOrderRefs are the identifiers needed to reconcile with Square.
+type SquareOrderRefs struct {
+	OrderID       SquareOrderID
+	OrderVersion  int64
+	PaymentLinkID string
+	PaymentID     string
+	CheckoutURL   string
+}
+
+// Order is the local record of a checkout. Items is an immutable snapshot:
+// it stays historically correct after products are renamed or repriced.
+type Order struct {
+	ID       OrderID
+	UserID   UserID // empty for guest orders
+	Status   OrderStatus
+	Customer Contact
+	Notes    string
+
+	Items    []OrderItem
+	Subtotal Money
+	Tax      Money
+	Total    Money
+
+	// IdempotencyKey is the client-supplied checkout key; retries with the
+	// same key return this order instead of creating another.
+	IdempotencyKey string
+	// AccessTokenHash authorizes guest access to the order (SHA-256 of the
+	// token handed to the guest at checkout).
+	AccessTokenHash string
+
+	Square SquareOrderRefs
+
+	EstimatedReadyAt time.Time
+	PaidAt           time.Time
+	CompletedAt      time.Time
+	LastSyncedAt     time.Time
+	Created          time.Time
+	Updated          time.Time
+}
+
+type OrderItem struct {
+	ProductID     ProductID
+	ProductSlug   string
+	ProductName   string
+	Category      ProductCategory
+	VariationID   SquareVariationID
+	VariationName string
+	Quantity      int64
+	UnitPrice     Money // variation + modifiers, per unit
+	Total         Money
+	Modifiers     []OrderItemModifier
+	Note          string
+}
+
+type OrderItemModifier struct {
+	ModifierID SquareModifierID
+	Name       string
+	Price      Money
+}
+
+// PrepUnits is the number of made-to-order items, the unit of work the
+// ETA estimator schedules.
+func PrepUnits(items []OrderItem) int64 {
+	var n int64
+	for _, it := range items {
+		if it.Category.RequiresPreparation() {
+			n += it.Quantity
+		}
+	}
+	return n
+}
+
+// User is a registered customer account.
+type User struct {
+	ID    UserID
+	Email string
+	Name  string
+	Phone string
 }

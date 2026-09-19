@@ -3,13 +3,11 @@ package migrations
 import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/migrations"
-
-	"felisa-cafe/backend/internal/models"
 )
 
 // seedProducts mirrors the PRODUCTS array in lib/menu.ts so the scaffold
 // serves real menu data out of the box instead of an empty collection.
-var seedProducts = []models.Product{
+var seedProducts = []legacySeedProduct{
 	{
 		Slug: "felisa-latte", Name: "Felisa Latte", Category: "signature", Price: 8.5,
 		Tagline:     "The one we named ourselves after.",
@@ -83,7 +81,7 @@ func init() {
 
 		for _, p := range seedProducts {
 			record := core.NewRecord(collection)
-			p.ApplyToRecord(record)
+			p.apply(record)
 
 			if err := app.Save(record); err != nil {
 				return err

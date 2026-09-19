@@ -1,28 +1,16 @@
+// Felisa Cafe backend: PocketBase (app DB, auth, admin UI, product cache)
+// with Square as the source of truth for catalog, orders and payments.
+// See README.md for the architecture.
 package main
 
 import (
 	"log"
 
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/plugins/migratecmd"
-
 	"felisa-cafe/backend/internal/cmd"
-	_ "felisa-cafe/backend/internal/migrations"
-	"felisa-cafe/backend/internal/providers/payments"
-	"felisa-cafe/backend/internal/routes"
 )
 
 func main() {
-	app := pocketbase.New()
-
-	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
-		Automigrate: true,
-	})
-
-	routes.Register(app)
-	app.RootCmd.AddCommand(cmd.CatalogSyncCommand(app, payments.NewSquareProcessor))
-
-	if err := app.Start(); err != nil {
+	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

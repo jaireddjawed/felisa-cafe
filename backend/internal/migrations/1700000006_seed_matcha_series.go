@@ -3,15 +3,13 @@ package migrations
 import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/migrations"
-
-	"felisa-cafe/backend/internal/models"
 )
 
 // seedMatchaSeries mirrors the "Matcha Series" flyer (12oz iced, first-harvest
 // Uji matcha). The matcha versions of Felisa Latte and Mabuhay Mocha aren't
 // duplicated here — those are already the "Matcha" entry in the existing
 // signature products' Bases field, not distinct drinks.
-var seedMatchaSeries = []models.Product{
+var seedMatchaSeries = []legacySeedProduct{
 	{
 		Slug: "classic-matcha-latte", Name: "Classic Matcha Latte", Category: "matcha", Price: 8.5,
 		Tagline:     "First-harvest Uji matcha, no detours.",
@@ -63,7 +61,7 @@ func init() {
 
 		for _, p := range seedMatchaSeries {
 			record := core.NewRecord(collection)
-			p.ApplyToRecord(record)
+			p.apply(record)
 
 			if err := app.Save(record); err != nil {
 				return err

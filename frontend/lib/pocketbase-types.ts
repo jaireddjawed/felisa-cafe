@@ -11,9 +11,13 @@ export const Collections = {
 	Mfas: "_mfas",
 	Otps: "_otps",
 	Superusers: "_superusers",
+	Carts: "carts",
+	ModifierLists: "modifier_lists",
 	Orders: "orders",
+	ProductVariations: "product_variations",
 	Products: "products",
 	Users: "users",
+	WebhookEvents: "webhook_events",
 } as const
 export type Collections = typeof Collections[keyof typeof Collections]
 
@@ -95,23 +99,75 @@ export type SuperusersRecord = {
 	verified?: boolean
 }
 
+export type CartsRecord<Titems = unknown> = {
+	created: IsoAutoDateString
+	id: string
+	items?: null | Titems
+	token_hash?: string
+	updated: IsoAutoDateString
+	user?: RecordIdString
+}
+
+export type ModifierListsRecord<Tmodifiers = unknown> = {
+	created: IsoAutoDateString
+	id: string
+	max_selected?: number
+	min_selected?: number
+	modifiers?: null | Tmodifiers
+	name?: string
+	square_modifier_list_id: string
+	square_version?: number
+	updated: IsoAutoDateString
+}
+
 export const OrdersStatusOptions = {
-	"pending": "pending",
-	"confirmed": "confirmed",
+	"pending_payment": "pending_payment",
+	"paid": "paid",
+	"preparing": "preparing",
+	"ready": "ready",
 	"completed": "completed",
 	"cancelled": "cancelled",
 } as const
 export type OrdersStatusOptions = typeof OrdersStatusOptions[keyof typeof OrdersStatusOptions]
-export type OrdersRecord<Titems = unknown> = {
+export type OrdersRecord<Tline_items = unknown> = {
+	access_token_hash?: string
+	checkout_url?: string
+	completed_at?: IsoDateString
 	created: IsoAutoDateString
+	currency?: string
 	customer_email: string
 	customer_name: string
 	customer_phone?: string
+	estimated_ready_at?: IsoDateString
 	id: string
-	items: null | Titems
+	idempotency_key?: string
+	last_synced_at?: IsoDateString
+	line_items?: null | Tline_items
 	notes?: string
+	paid_at?: IsoDateString
+	square_order_id?: string
+	square_order_version?: number
+	square_payment_id?: string
+	square_payment_link_id?: string
 	status: OrdersStatusOptions
-	subtotal: number
+	subtotal_amount?: number
+	tax_amount?: number
+	total_amount?: number
+	updated: IsoAutoDateString
+	user?: RecordIdString
+}
+
+export type ProductVariationsRecord = {
+	created: IsoAutoDateString
+	currency: string
+	id: string
+	name?: string
+	ordinal?: number
+	price_amount?: number
+	product: RecordIdString
+	sellable?: boolean
+	square_variation_id: string
+	square_version?: number
 	updated: IsoAutoDateString
 }
 
@@ -119,22 +175,35 @@ export const ProductsCategoryOptions = {
 	"signature": "signature",
 	"pantry": "pantry",
 	"merch": "merch",
+	"matcha": "matcha",
 } as const
 export type ProductsCategoryOptions = typeof ProductsCategoryOptions[keyof typeof ProductsCategoryOptions]
-export type ProductsRecord<Tbases = unknown, Tingredients = unknown> = {
+
+export const ProductsCatalogStatusOptions = {
+	"unlinked": "unlinked",
+	"active": "active",
+	"archived": "archived",
+	"deleted": "deleted",
+} as const
+export type ProductsCatalogStatusOptions = typeof ProductsCatalogStatusOptions[keyof typeof ProductsCatalogStatusOptions]
+export type ProductsRecord<Tingredients = unknown, Tmodifier_lists = unknown> = {
 	badge?: string
-	bases?: null | Tbases
-	category: ProductsCategoryOptions
+	catalog_status: ProductsCatalogStatusOptions
+	category?: ProductsCategoryOptions
 	created: IsoAutoDateString
 	description?: string
 	id: string
 	ingredients?: null | Tingredients
+	modifier_lists?: null | Tmodifier_lists
 	name: string
-	pour_bottom: string
-	pour_top: string
-	price: number
+	pour_bottom?: string
+	pour_top?: string
 	size?: string
 	slug: string
+	sort_order?: number
+	square_item_id?: string
+	square_version?: number
+	synced_at?: IsoDateString
 	tagline?: string
 	updated: IsoAutoDateString
 }
@@ -147,9 +216,17 @@ export type UsersRecord = {
 	id: string
 	name?: string
 	password: string
+	phone?: string
 	tokenKey: string
 	updated: IsoAutoDateString
 	verified?: boolean
+}
+
+export type WebhookEventsRecord = {
+	created: IsoAutoDateString
+	event_id: string
+	event_type?: string
+	id: string
 }
 
 // Response types include system fields and match responses from the PocketBase API
@@ -158,9 +235,13 @@ export type ExternalauthsResponse<Texpand = unknown> = Required<ExternalauthsRec
 export type MfasResponse<Texpand = unknown> = Required<MfasRecord> & BaseSystemFields<Texpand>
 export type OtpsResponse<Texpand = unknown> = Required<OtpsRecord> & BaseSystemFields<Texpand>
 export type SuperusersResponse<Texpand = unknown> = Required<SuperusersRecord> & AuthSystemFields<Texpand>
-export type OrdersResponse<Titems = unknown, Texpand = unknown> = Required<OrdersRecord<Titems>> & BaseSystemFields<Texpand>
-export type ProductsResponse<Tbases = unknown, Tingredients = unknown, Texpand = unknown> = Required<ProductsRecord<Tbases, Tingredients>> & BaseSystemFields<Texpand>
+export type CartsResponse<Titems = unknown, Texpand = unknown> = Required<CartsRecord<Titems>> & BaseSystemFields<Texpand>
+export type ModifierListsResponse<Tmodifiers = unknown, Texpand = unknown> = Required<ModifierListsRecord<Tmodifiers>> & BaseSystemFields<Texpand>
+export type OrdersResponse<Tline_items = unknown, Texpand = unknown> = Required<OrdersRecord<Tline_items>> & BaseSystemFields<Texpand>
+export type ProductVariationsResponse<Texpand = unknown> = Required<ProductVariationsRecord> & BaseSystemFields<Texpand>
+export type ProductsResponse<Tingredients = unknown, Tmodifier_lists = unknown, Texpand = unknown> = Required<ProductsRecord<Tingredients, Tmodifier_lists>> & BaseSystemFields<Texpand>
 export type UsersResponse<Texpand = unknown> = Required<UsersRecord> & AuthSystemFields<Texpand>
+export type WebhookEventsResponse<Texpand = unknown> = Required<WebhookEventsRecord> & BaseSystemFields<Texpand>
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -170,9 +251,13 @@ export type CollectionRecords = {
 	_mfas: MfasRecord
 	_otps: OtpsRecord
 	_superusers: SuperusersRecord
+	carts: CartsRecord
+	modifier_lists: ModifierListsRecord
 	orders: OrdersRecord
+	product_variations: ProductVariationsRecord
 	products: ProductsRecord
 	users: UsersRecord
+	webhook_events: WebhookEventsRecord
 }
 
 export type CollectionResponses = {
@@ -181,9 +266,13 @@ export type CollectionResponses = {
 	_mfas: MfasResponse
 	_otps: OtpsResponse
 	_superusers: SuperusersResponse
+	carts: CartsResponse
+	modifier_lists: ModifierListsResponse
 	orders: OrdersResponse
+	product_variations: ProductVariationsResponse
 	products: ProductsResponse
 	users: UsersResponse
+	webhook_events: WebhookEventsResponse
 }
 
 // Utility types for create/update operations
