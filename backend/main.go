@@ -6,8 +6,9 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
-	"felisa-cafe/backend/internal/actions"
+	"felisa-cafe/backend/internal/cmd"
 	_ "felisa-cafe/backend/internal/migrations"
+	"felisa-cafe/backend/internal/providers/payments"
 	"felisa-cafe/backend/internal/routes"
 )
 
@@ -18,8 +19,8 @@ func main() {
 		Automigrate: true,
 	})
 
-	router.Register(app)
-	app.RootCmd.AddCommand(actions.CatalogSyncCommand(app, payments.NewSquareProcessor))
+	routes.Register(app)
+	app.RootCmd.AddCommand(cmd.CatalogSyncCommand(app, payments.NewSquareProcessor))
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
