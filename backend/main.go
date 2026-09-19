@@ -7,7 +7,7 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
 	_ "felisa-cafe/backend/internal/migrations"
-	"felisa-cafe/backend/internal/router"
+	"felisa-cafe/backend/internal/routes"
 )
 
 func main() {
@@ -17,7 +17,7 @@ func main() {
 		Automigrate: true,
 	})
 
-	router.Register(app)
+	routes.Register(app)
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
