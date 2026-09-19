@@ -21,16 +21,17 @@ var noMilkSlugs = map[string]bool{
 // item per product missing a CatalogID, and full-replaces the existing item
 // (name, price, variations, modifiers) for products that already have one.
 func (p *SquareProcessor) SyncCatalog(ctx context.Context, products []*models.Product) ([]CatalogSyncResult, error) {
+	// Exactly one milk (required, exclusive) vs. any number of add-ons.
 	milkID, err := p.ensureModifierList(ctx, "Milk", []string{
 		"Whole Milk", "Oat Milk", "Almond Milk", "Coconut Milk", "Non-Fat Milk",
-	})
+	}, 1, 1)
 	if err != nil {
 		return nil, err
 	}
 
 	addOnsID, err := p.ensureModifierList(ctx, "Add-Ons", []string{
 		"Maple Cold Foam", "Ube Whipped Cream",
-	})
+	}, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -127,11 +128,14 @@ func buildItemObject(p *models.Product, milkID, addOnsID string) *sq.CatalogObje
 }
 
 // ensureModifierList finds a MODIFIER_LIST catalog object by exact name and
-// returns its ID, creating it (with $0 modifiers, since milk/add-ons are
-// free per the menu) if it doesn't exist yet. Modifier lists are shared
+// full-replaces it (creating it if it doesn't exist yet) with $0 modifiers,
+// since milk/add-ons are free per the menu, and the given selection limits
+// (e.g. min=max=1 makes a list required-and-exclusive, like a radio button;
+// min=max=0 leaves it optional with no cap). Modifier lists are shared
 // across products, so they're looked up by name rather than cached on any
-// single PocketBase record.
-func (p *SquareProcessor) ensureModifierList(ctx context.Context, name string, modifierNames []string) (string, error) {
+// single PocketBase record, and re-upserted on every sync so limit changes
+// here also correct whatever Square already has.
+func (p *SquareProcessor) ensureModifierList(ctx context.Context, name string, modifierNames []string, minSelected, maxSelected int64) (string, error) {
 	found, err := p.client.Catalog.Search(ctx, &sq.SearchCatalogObjectsRequest{
 		ObjectTypes: []sq.CatalogObjectType{sq.CatalogObjectTypeModifierList},
 		Query: &sq.CatalogQuery{
@@ -141,14 +145,22 @@ func (p *SquareProcessor) ensureModifierList(ctx context.Context, name string, m
 	if err != nil {
 		return "", fmt.Errorf("search modifier list %q: %w", name, err)
 	}
+
+	existingID := ""
 	for _, obj := range found.Objects {
 		if obj.ModifierList == nil || obj.ModifierList.ModifierListData == nil {
 			continue
 		}
 		data := obj.ModifierList.ModifierListData
 		if data.Name != nil && *data.Name == name {
-			return obj.ModifierList.ID, nil
+			existingID = obj.ModifierList.ID
+			break
 		}
+	}
+
+	listID := "#modifier-list"
+	if existingID != "" {
+		listID = existingID
 	}
 
 	modifiers := make([]*sq.CatalogObject, len(modifierNames))
@@ -165,27 +177,32 @@ func (p *SquareProcessor) ensureModifierList(ctx context.Context, name string, m
 		}
 	}
 
-	const tempListID = "#modifier-list"
 	resp, err := p.client.Catalog.BatchUpsert(ctx, &sq.BatchUpsertCatalogObjectsRequest{
 		IdempotencyKey: uuid.NewString(),
 		Batches: []*sq.CatalogObjectBatch{{
 			Objects: []*sq.CatalogObject{{
 				Type: string(sq.CatalogObjectTypeModifierList),
 				ModifierList: &sq.CatalogObjectModifierList{
-					ID: tempListID,
+					ID: listID,
 					ModifierListData: &sq.CatalogModifierList{
-						Name:      sq.String(name),
-						Modifiers: modifiers,
+						Name:                 sq.String(name),
+						Modifiers:            modifiers,
+						MinSelectedModifiers: sq.Int64(minSelected),
+						MaxSelectedModifiers: sq.Int64(maxSelected),
 					},
 				},
 			}},
 		}},
 	})
 	if err != nil {
-		return "", fmt.Errorf("create modifier list %q: %w", name, err)
+		return "", fmt.Errorf("upsert modifier list %q: %w", name, err)
+	}
+
+	if existingID != "" {
+		return existingID, nil
 	}
 	for _, m := range resp.IDMappings {
-		if m.ClientObjectID != nil && *m.ClientObjectID == tempListID && m.ObjectID != nil {
+		if m.ClientObjectID != nil && *m.ClientObjectID == listID && m.ObjectID != nil {
 			return *m.ObjectID, nil
 		}
 	}
