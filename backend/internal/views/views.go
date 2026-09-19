@@ -260,14 +260,38 @@ func (in CheckoutInput) Validate(signedIn bool) error {
 }
 
 type CheckoutView struct {
-	OrderID     string `json:"orderId"`
-	CheckoutURL string `json:"checkoutUrl"`
+	OrderID string `json:"orderId"`
 	// OrderToken authorizes a guest to view this order: send it as the
 	// X-Order-Token header to GET /api/orders/{id}. Store it client-side;
 	// it cannot be recovered.
-	OrderToken       string    `json:"orderToken,omitempty"`
-	EstimatedReadyAt time.Time `json:"estimatedReadyAt"`
-	Total            MoneyView `json:"total"`
+	OrderToken       string                `json:"orderToken,omitempty"`
+	EstimatedReadyAt time.Time             `json:"estimatedReadyAt"`
+	Total            MoneyView             `json:"total"`
+	Subtotal         MoneyView             `json:"subtotal"`
+	Tax              MoneyView             `json:"tax"`
+	Square           SquareWebPaymentsView `json:"square"`
+	AllowTipping     bool                  `json:"allowTipping"`
+}
+
+type SquareWebPaymentsView struct {
+	ApplicationID string `json:"applicationId"`
+	LocationID    string `json:"locationId"`
+	Environment   string `json:"environment"`
+}
+
+type PayCheckoutInput struct {
+	OrderID  string `json:"orderId"`
+	SourceID string `json:"sourceId"`
+	// TipAmount is minor units, e.g. cents.
+	TipAmount int64 `json:"tipAmount"`
+}
+
+func (in PayCheckoutInput) Validate() error {
+	return validation.ValidateStruct(&in,
+		validation.Field(&in.OrderID, validation.Required),
+		validation.Field(&in.SourceID, validation.Required),
+		validation.Field(&in.TipAmount, validation.Min(0)),
+	)
 }
 
 // ---------------------------------------------------------------------------

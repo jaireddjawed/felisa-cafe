@@ -23,7 +23,8 @@ import (
 )
 
 type Config struct {
-	AccessToken string
+	AccessToken   string
+	ApplicationID string
 	// Environment is "sandbox" or "production".
 	Environment string
 	LocationID  string

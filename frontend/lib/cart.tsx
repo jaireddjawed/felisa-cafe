@@ -1,40 +1,36 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 
-export type CartLine = {
-  /** slug plus the chosen options, so two builds of one drink stay separate. */
-  id: string;
-  slug: string;
-  name: string;
-  unitPrice: number;
-  qty: number;
-  options: string[];
-};
+import type { AddCartItemInput, CartLineView, CartView } from "./api-types";
+import { cartApi, orderApi, type StoreAuth } from "./pocketbase";
+
+const TOKEN_KEY = "felisa-cart-token";
+const ORDER_TOKEN_KEY = "felisa-order-token";
 
 type CartSnapshot = {
-  lines: CartLine[];
+  cart: CartView | null;
   isOpen: boolean;
+  loading: boolean;
+  error: string | null;
 };
 
-const STORAGE_KEY = "felisa-cart";
+const EMPTY_CART: CartView = {
+  lines: [],
+  subtotal: { amount: 0, currency: "USD", formatted: "$0.00" },
+  itemCount: 0,
+  valid: true,
+};
 
-/** The server has no cart, and hydration has to agree with that. */
-const EMPTY: CartSnapshot = { lines: [], isOpen: false };
+const EMPTY: CartSnapshot = {
+  cart: EMPTY_CART,
+  isOpen: false,
+  loading: false,
+  error: null,
+};
 
-function read(): CartLine[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as CartLine[]) : [];
-  } catch {
-    // A corrupt or unavailable store just means we start empty.
-    return [];
-  }
-}
-
-let snapshot: CartSnapshot =
-  typeof window === "undefined" ? EMPTY : { lines: read(), isOpen: false };
-
+let snapshot: CartSnapshot = EMPTY;
+let initialized = false;
 const listeners = new Set<() => void>();
 
 function subscribe(fn: () => void) {
@@ -42,51 +38,132 @@ function subscribe(fn: () => void) {
   return () => listeners.delete(fn);
 }
 
-function commit(next: CartSnapshot) {
+function emit(next: CartSnapshot) {
   snapshot = next;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next.lines));
-  } catch {
-    // Ignore quota or private-mode failures.
-  }
   for (const fn of listeners) fn();
 }
 
-function lineId(slug: string, options: string[]) {
-  return [slug, ...options].join("|");
+function getToken() {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function setToken(token?: string) {
+  if (!token) return;
+  try {
+    window.localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // Private mode or quota errors should not break ordering.
+  }
+}
+
+function auth(): StoreAuth {
+  return { cartToken: getToken() };
+}
+
+function rememberCart(nextCart: CartView) {
+  setToken(nextCart.cartToken);
+  emit({ ...snapshot, cart: nextCart, loading: false, error: null });
+}
+
+async function refresh() {
+  emit({ ...snapshot, loading: true, error: null });
+  try {
+    rememberCart(await cartApi.get(auth()));
+  } catch (err) {
+    emit({
+      ...snapshot,
+      loading: false,
+      error: err instanceof Error ? err.message : "Cart unavailable.",
+    });
+  }
 }
 
 export const cart = {
-  add(line: Omit<CartLine, "id" | "qty">, qty = 1) {
-    const id = lineId(line.slug, line.options);
-    const existing = snapshot.lines.find((l) => l.id === id);
-    const lines = existing
-      ? snapshot.lines.map((l) => (l.id === id ? { ...l, qty: l.qty + qty } : l))
-      : [...snapshot.lines, { ...line, id, qty }];
-    commit({ lines, isOpen: true });
+  init() {
+    if (initialized || typeof window === "undefined") return;
+    initialized = true;
+    void refresh();
   },
-  setQty(id: string, qty: number) {
-    const lines =
-      qty <= 0
-        ? snapshot.lines.filter((l) => l.id !== id)
-        : snapshot.lines.map((l) => (l.id === id ? { ...l, qty } : l));
-    commit({ ...snapshot, lines });
+  async add(item: AddCartItemInput) {
+    emit({ ...snapshot, loading: true, error: null });
+    try {
+      rememberCart(await cartApi.add(auth(), item));
+      emit({ ...snapshot, isOpen: true });
+    } catch (err) {
+      emit({
+        ...snapshot,
+        loading: false,
+        error: err instanceof Error ? err.message : "Could not add item.",
+      });
+    }
   },
-  remove(id: string) {
-    commit({ ...snapshot, lines: snapshot.lines.filter((l) => l.id !== id) });
+  async setQty(lineId: string, quantity: number) {
+    emit({ ...snapshot, loading: true, error: null });
+    try {
+      rememberCart(await cartApi.setQuantity(auth(), lineId, quantity));
+    } catch (err) {
+      emit({
+        ...snapshot,
+        loading: false,
+        error: err instanceof Error ? err.message : "Could not update item.",
+      });
+    }
   },
-  clear() {
-    commit({ ...snapshot, lines: [] });
+  async remove(lineId: string) {
+    emit({ ...snapshot, loading: true, error: null });
+    try {
+      rememberCart(await cartApi.setQuantity(auth(), lineId, 0));
+    } catch (err) {
+      emit({
+        ...snapshot,
+        loading: false,
+        error: err instanceof Error ? err.message : "Could not remove item.",
+      });
+    }
+  },
+  async checkout(input: {
+    customerName: string;
+    customerEmail: string;
+    customerPhone?: string;
+    notes?: string;
+  }) {
+    emit({ ...snapshot, loading: true, error: null });
+    try {
+      const result = await orderApi.checkout(
+        auth(),
+        input,
+        window.crypto.randomUUID(),
+      );
+      if (result.orderToken) {
+        window.localStorage.setItem(ORDER_TOKEN_KEY, result.orderToken);
+      }
+      window.location.href = `/checkout?order=${encodeURIComponent(result.orderId)}`;
+    } catch (err) {
+      emit({
+        ...snapshot,
+        loading: false,
+        error: err instanceof Error ? err.message : "Could not start checkout.",
+      });
+    }
+  },
+  clearError() {
+    emit({ ...snapshot, error: null });
   },
   open() {
-    commit({ ...snapshot, isOpen: true });
+    emit({ ...snapshot, isOpen: true });
   },
   close() {
-    commit({ ...snapshot, isOpen: false });
+    emit({ ...snapshot, isOpen: false });
   },
 };
 
 export function useCart() {
+  useEffect(() => cart.init(), []);
+
   const state = useSyncExternalStore(
     subscribe,
     () => snapshot,
@@ -96,10 +173,13 @@ export function useCart() {
   return useMemo(
     () => ({
       ...cart,
-      lines: state.lines,
+      lines: state.cart?.lines ?? ([] as CartLineView[]),
       isOpen: state.isOpen,
-      count: state.lines.reduce((n, l) => n + l.qty, 0),
-      subtotal: state.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0),
+      loading: state.loading,
+      error: state.error,
+      count: state.cart?.itemCount ?? 0,
+      subtotal: state.cart?.subtotal ?? EMPTY_CART.subtotal,
+      valid: state.cart?.valid ?? true,
     }),
     [state],
   );

@@ -57,7 +57,7 @@ func TestGuestCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	o := res.Order
-	if o.Status != models.OrderPendingPayment || o.UserID != "" || o.Square.OrderID == "" || res.CheckoutURL == "" {
+	if o.Status != models.OrderPendingPayment || o.UserID != "" || o.Square.OrderID == "" {
 		t.Fatalf("order = %+v", o)
 	}
 	if res.AccessToken == "" || o.AccessTokenHash == "" || o.AccessTokenHash == res.AccessToken {
@@ -74,8 +74,7 @@ func TestGuestCheckout(t *testing.T) {
 	// The Square order references catalog IDs, built from the snapshot.
 	req := env.Square.Requests[0]
 	if req.IdempotencyKey != "felisa-order-"+string(o.ID) || req.LocalOrderID != o.ID ||
-		req.Lines[0].VariationID != testutil.LatteMatcha || req.Lines[0].Quantity != 2 ||
-		req.RedirectURL != "https://felisa.test/orders/"+string(o.ID) {
+		req.Lines[0].VariationID != testutil.LatteMatcha || req.Lines[0].Quantity != 2 {
 		t.Errorf("square request = %+v", req)
 	}
 
@@ -102,11 +101,11 @@ func TestCheckoutIsIdempotentPerKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Order.ID != first.Order.ID || second.CheckoutURL != first.CheckoutURL {
+	if second.Order.ID != first.Order.ID || second.Order.Square.OrderID != first.Order.Square.OrderID {
 		t.Error("a retry must return the original order")
 	}
 	if env.Square.CreateHits != 1 || countOrders(t, env) != 1 {
-		t.Errorf("square links=%d local orders=%d, want 1/1", env.Square.CreateHits, countOrders(t, env))
+		t.Errorf("square orders=%d local orders=%d, want 1/1", env.Square.CreateHits, countOrders(t, env))
 	}
 	// The retry's token is the valid one (the first response was presumably lost).
 	if _, err := env.Orders.GetForViewer(ctx, first.Order.ID, orders.Viewer{AccessToken: second.AccessToken}); err != nil {

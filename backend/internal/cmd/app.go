@@ -61,7 +61,14 @@ func Run() error {
 	catalogSvc := catalog.New(store, catalogAPI, log)
 	cartSvc := cart.New(store)
 	ordersSvc := orders.New(store, checkoutAPI, estimator, log)
-	checkoutSvc := checkout.New(checkout.Config{PublicSiteURL: cfg.PublicSiteURL},
+	checkoutCfg := checkout.Config{PublicSiteURL: cfg.PublicSiteURL}
+	if cfg.Square != nil {
+		checkoutCfg.SquareApplicationID = cfg.Square.ApplicationID
+		checkoutCfg.SquareLocationID = cfg.Square.LocationID
+		checkoutCfg.SquareEnvironment = cfg.Square.Environment
+		checkoutCfg.AllowTipping = cfg.Square.AllowTipping
+	}
+	checkoutSvc := checkout.New(checkoutCfg,
 		store, cartSvc, catalogAPI, checkoutAPI, estimator, catalogSvc.TriggerSync, log)
 	webhookSvc := webhooks.New(store, ordersSvc, catalogSvc, log)
 

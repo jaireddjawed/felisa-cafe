@@ -8,52 +8,43 @@ import (
 	"time"
 
 	sq "github.com/square/square-go-sdk/v4"
-	"github.com/square/square-go-sdk/v4/checkout"
 
 	"felisa-cafe/backend/internal/models"
 	"felisa-cafe/backend/internal/providers/payments"
 )
 
-// CreatePaymentLink creates a Square Order from catalog variation/modifier
-// IDs (so Square, not us, prices every line and applies taxes) and a hosted
-// checkout page for it.
+// CreateOrder creates a Square Order from catalog variation/modifier IDs, so
+// Square, not us, prices every line and applies taxes.
 //
-// Square replays the original response for a repeated idempotency key with
+// Square replays the original order for a repeated idempotency key with
 // an identical body, so callers must derive the key from the local order and
 // build the request from the persisted order snapshot.
-func (c *Client) CreatePaymentLink(ctx context.Context, req payments.PaymentLinkRequest) (*payments.PaymentLink, error) {
+func (c *Client) CreateOrder(ctx context.Context, req payments.OrderRequest) (*payments.OrderState, error) {
 	ctx, cancel := c.withTimeout(ctx)
 	defer cancel()
 
-	resp, err := c.sq.Checkout.PaymentLinks.Create(ctx, c.paymentLinkRequest(req))
+	resp, err := c.sq.Orders.Create(ctx, &sq.CreateOrderRequest{
+		Order:          c.orderRequest(req),
+		IdempotencyKey: sq.String(req.IdempotencyKey),
+	})
 	if err != nil {
-		return nil, classify("create payment link", err)
+		return nil, classify("create order", err)
 	}
-	if err := errorsIn("create payment link", resp.Errors); err != nil {
+	if err := errorsIn("create order", resp.Errors); err != nil {
 		return nil, err
 	}
-	if resp.PaymentLink == nil || resp.PaymentLink.OrderID == nil {
-		return nil, fmt.Errorf("square create payment link: %w: response missing payment link", payments.ErrUnavailable)
+	if resp.Order == nil || resp.Order.ID == nil {
+		return nil, fmt.Errorf("square create order: %w: response missing order", payments.ErrUnavailable)
 	}
 
-	link := &payments.PaymentLink{
-		ID:  deref(resp.PaymentLink.ID),
-		URL: deref(resp.PaymentLink.URL),
+	state := c.orderState(resp.Order)
+	if state.ID == "" {
+		state.ID = models.SquareOrderID(*resp.Order.ID)
 	}
-	if resp.RelatedResources != nil {
-		for _, o := range resp.RelatedResources.Orders {
-			if o != nil && deref(o.ID) == *resp.PaymentLink.OrderID {
-				link.Order = c.orderState(o)
-			}
-		}
-	}
-	if link.Order.ID == "" {
-		link.Order.ID = models.SquareOrderID(*resp.PaymentLink.OrderID)
-	}
-	return link, nil
+	return &state, nil
 }
 
-func (c *Client) paymentLinkRequest(req payments.PaymentLinkRequest) *checkout.CreatePaymentLinkRequest {
+func (c *Client) orderRequest(req payments.OrderRequest) *sq.Order {
 	lines := make([]*sq.OrderLineItem, len(req.Lines))
 	for i, l := range req.Lines {
 		mods := make([]*sq.OrderLineItemModifier, len(l.ModifierIDs))
@@ -88,7 +79,7 @@ func (c *Client) paymentLinkRequest(req payments.PaymentLinkRequest) *checkout.C
 	}
 
 	localID := string(req.LocalOrderID)
-	order := &sq.Order{
+	return &sq.Order{
 		LocationID:  c.cfg.LocationID,
 		ReferenceID: sq.String(localID),
 		LineItems:   lines,
@@ -103,21 +94,49 @@ func (c *Client) paymentLinkRequest(req payments.PaymentLinkRequest) *checkout.C
 			AutoApplyDiscounts: sq.Bool(true),
 		},
 	}
+}
 
-	r := &checkout.CreatePaymentLinkRequest{
-		IdempotencyKey: sq.String(req.IdempotencyKey),
-		Order:          order,
-		CheckoutOptions: &sq.CheckoutOptions{
-			RedirectURL:           sq.String(req.RedirectURL),
-			AskForShippingAddress: sq.Bool(false),
-			AllowTipping:          sq.Bool(c.cfg.AllowTipping),
-		},
-		PaymentNote: sq.String("Online order " + localID),
+// CreatePayment charges a token produced by the Square Web Payments SDK.
+func (c *Client) CreatePayment(ctx context.Context, req payments.PaymentRequest) (*payments.PaymentResult, error) {
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
+
+	payReq := &sq.CreatePaymentRequest{
+		SourceID:       req.SourceID,
+		IdempotencyKey: req.IdempotencyKey,
+		AmountMoney:    moneyPtr(req.Amount),
+		LocationID:     sq.String(c.cfg.LocationID),
+		OrderID:        sq.String(string(req.OrderID)),
+		Autocomplete:   sq.Bool(true),
+		ReferenceID:    sq.String(string(req.LocalOrderID)),
+		Note:           sq.String("Online order " + string(req.LocalOrderID)),
+	}
+	if req.Tip.Amount > 0 {
+		payReq.TipMoney = moneyPtr(req.Tip)
 	}
 	if req.Customer.Email != "" {
-		r.PrePopulatedData = &sq.PrePopulatedData{BuyerEmail: sq.String(req.Customer.Email)}
+		payReq.BuyerEmailAddress = sq.String(req.Customer.Email)
 	}
-	return r
+	if req.Customer.Phone != "" {
+		payReq.BuyerPhoneNumber = sq.String(req.Customer.Phone)
+	}
+
+	resp, err := c.sq.Payments.Create(ctx, payReq)
+	if err != nil {
+		return nil, classify("create payment", err)
+	}
+	if err := errorsIn("create payment", resp.Errors); err != nil {
+		return nil, err
+	}
+	if resp.Payment == nil || resp.Payment.ID == nil {
+		return nil, fmt.Errorf("square create payment: %w: response missing payment", payments.ErrUnavailable)
+	}
+
+	state, err := c.GetOrder(ctx, req.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	return &payments.PaymentResult{PaymentID: deref(resp.Payment.ID), Order: *state}, nil
 }
 
 // GetOrder reads the authoritative order state.
@@ -194,4 +213,8 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return string(r[:n])
+}
+
+func moneyPtr(m models.Money) *sq.Money {
+	return &sq.Money{Amount: sq.Int64(m.Amount), Currency: sq.Currency(m.Currency).Ptr()}
 }

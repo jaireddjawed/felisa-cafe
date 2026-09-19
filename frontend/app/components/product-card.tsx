@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { money, type Product } from "@/lib/menu";
+import type { ProductView } from "@/lib/api-types";
 import { DrinkGlass, Sparkle } from "./doodles";
 
 const TILTS = ["-rotate-2", "rotate-1", "-rotate-1", "rotate-2"];
@@ -8,9 +8,11 @@ export function ProductCard({
   product,
   index = 0,
 }: {
-  product: Product;
+  product: ProductView;
   index?: number;
 }) {
+  const price = product.fromPrice ?? product.variations.find((v) => v.available)?.price;
+
   return (
     <Link
       href={`/menu/${product.slug}`}
@@ -47,7 +49,7 @@ export function ProductCard({
 
       <div className="mt-3 flex items-center">
         <span className="font-marker text-xl text-lav-700">
-          {money(product.price)}
+          {price?.formatted ?? "Sold out"}
         </span>
         <span className="ml-auto rounded-full border-2 border-dashed border-lav-400 px-3 py-1 font-hand text-base text-lav-700 group-hover:bg-lav-600 group-hover:text-white">
           build it →

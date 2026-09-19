@@ -8,10 +8,16 @@ import type {
   CheckoutView,
   ETAView,
   OrderView,
+  PayCheckoutInput,
   ProductView,
 } from "./api-types";
 
-const PB_URL = process.env.NEXT_PUBLIC_PB_URL ?? "http://127.0.0.1:8090";
+// Browser requests use NEXT_PUBLIC_PB_URL; server-side calls inside Docker use
+// the private Compose service URL.
+const PB_URL =
+  typeof window === "undefined"
+    ? process.env.PB_URL ?? process.env.NEXT_PUBLIC_PB_URL ?? "http://127.0.0.1:8090"
+    : process.env.NEXT_PUBLIC_PB_URL ?? "http://127.0.0.1:8090";
 
 /** Typed PocketBase client for direct collection access (auth, realtime, etc). */
 export const pb = new PocketBase(PB_URL) as TypedPocketBase;
@@ -34,10 +40,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export const menuApi = {
   listProducts(...categories: ProductView["category"][]) {
     const query = categories.length ? `?category=${categories.join(",")}` : "";
-    return api<ProductView[]>(`/api/menu/products${query}`);
+    return api<ProductView[]>(`/api/menu/products${query}`, { cache: "no-store" });
   },
   getProduct(slug: string) {
-    return api<ProductView>(`/api/menu/products/${slug}`);
+    return api<ProductView>(`/api/menu/products/${slug}`, { cache: "no-store" });
   },
 };
 
@@ -83,7 +89,7 @@ export const cartApi = {
 
 export const orderApi = {
   /**
-   * Starts Square-hosted checkout; redirect the browser to `checkoutUrl`.
+   * Starts checkout by creating a pending Square order.
    * Generate `idempotencyKey` once per checkout attempt (crypto.randomUUID())
    * and reuse it on retries. Guests must store the returned `orderToken`.
    */
@@ -91,6 +97,21 @@ export const orderApi = {
     return api<CheckoutView>("/api/checkout", {
       method: "POST",
       headers: { ...authHeaders(auth), "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(input),
+    });
+  },
+  pay(
+    opts: { orderToken?: string; authToken?: string },
+    input: PayCheckoutInput,
+    idempotencyKey: string,
+  ) {
+    return api<OrderView>("/api/checkout/pay", {
+      method: "POST",
+      headers: {
+        ...(opts.orderToken ? { "X-Order-Token": opts.orderToken } : {}),
+        ...(opts.authToken ? { Authorization: opts.authToken } : {}),
+        "Idempotency-Key": idempotencyKey,
+      },
       body: JSON.stringify(input),
     });
   },

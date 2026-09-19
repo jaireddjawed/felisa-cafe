@@ -124,7 +124,6 @@ export interface CheckoutInput {
 }
 export interface CheckoutView {
   orderId: string;
-  checkoutUrl: string;
   /**
    * OrderToken authorizes a guest to view this order: send it as the
    * X-Order-Token header to GET /api/orders/{id}. Store it client-side;
@@ -133,6 +132,20 @@ export interface CheckoutView {
   orderToken?: string;
   estimatedReadyAt: string /* RFC 3339 */;
   total: MoneyView;
+  subtotal: MoneyView;
+  tax: MoneyView;
+  square: SquareWebPaymentsView;
+  allowTipping: boolean;
+}
+export interface SquareWebPaymentsView {
+  applicationId: string;
+  locationId: string;
+  environment: string;
+}
+export interface PayCheckoutInput {
+  orderId: string;
+  sourceId: string;
+  tipAmount: number /* int64 */;
 }
 export interface OrderView {
   id: string;

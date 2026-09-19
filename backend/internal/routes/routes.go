@@ -29,6 +29,7 @@ func Register(app core.App, h *actions.Handlers) {
 
 		// Checkout and orders.
 		api.POST("/checkout", h.StartCheckout)
+		api.POST("/checkout/pay", h.PayCheckout)
 		api.GET("/orders", h.ListOrders).Bind(signedIn)
 		api.GET("/orders/{id}", h.GetOrder)
 

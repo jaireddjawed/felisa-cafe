@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PRODUCTS, SIGNATURES, getProduct } from "@/lib/menu";
-import { money } from "@/lib/menu";
+import { menuApi } from "@/lib/pocketbase";
 import { AddToCart } from "../../components/add-to-cart";
 import { ProductCard } from "../../components/product-card";
 import {
@@ -12,25 +11,27 @@ import {
   SquiggleRule,
 } from "../../components/doodles";
 
-export function generateStaticParams() {
-  return PRODUCTS.map((p) => ({ slug: p.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata(
   props: PageProps<"/menu/[slug]">,
 ): Promise<Metadata> {
   const { slug } = await props.params;
-  const product = getProduct(slug);
+  const product = await menuApi.getProduct(slug).catch(() => null);
   if (!product) return { title: "Not on the menu" };
   return { title: product.name, description: product.tagline };
 }
 
 export default async function ProductPage(props: PageProps<"/menu/[slug]">) {
   const { slug } = await props.params;
-  const product = getProduct(slug);
+  const [product, products] = await Promise.all([
+    menuApi.getProduct(slug).catch(() => null),
+    menuApi.listProducts("signature"),
+  ]);
   if (!product) notFound();
 
-  const alsoLike = SIGNATURES.filter((p) => p.slug !== product.slug).slice(0, 4);
+  const alsoLike = products.filter((p) => p.slug !== product.slug).slice(0, 4);
+  const price = product.fromPrice ?? product.variations.find((v) => v.available)?.price;
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-12">
@@ -79,7 +80,7 @@ export default async function ProductPage(props: PageProps<"/menu/[slug]">) {
           </p>
 
           <p className="mt-5 font-marker text-3xl text-lav-700">
-            {money(product.price)}
+            {price?.formatted ?? "Sold out"}
             {product.size && (
               <span className="ml-3 font-hand text-xl text-lav-600">
                 {product.size}

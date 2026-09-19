@@ -56,6 +56,7 @@ func Load() (Config, error) {
 	if token := os.Getenv("SQUARE_ACCESS_TOKEN"); token != "" {
 		sc := &square.Config{
 			AccessToken:         token,
+			ApplicationID:       os.Getenv("SQUARE_APPLICATION_ID"),
 			Environment:         env("SQUARE_ENVIRONMENT", "sandbox"),
 			LocationID:          os.Getenv("SQUARE_LOCATION_ID"),
 			Currency:            models.Currency(env("SQUARE_CURRENCY", "USD")),

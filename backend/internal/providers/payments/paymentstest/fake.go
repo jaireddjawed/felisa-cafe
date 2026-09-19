@@ -1,6 +1,6 @@
 // Package paymentstest provides an in-memory fake of the payments
 // interfaces that mimics the Square behaviours the app relies on:
-// idempotent payment link creation, catalog-priced orders, and orders whose
+// idempotent order creation, catalog-priced orders, and orders whose
 // state is changed out-of-band (payment, fulfillment).
 package paymentstest
 
@@ -21,15 +21,16 @@ type Fake struct {
 
 	// Errors to inject.
 	FetchErr, LookupErr, CreateErr, GetErr error
-	// TimeoutAfterCreate makes the next CreatePaymentLink succeed "remotely"
+	// TimeoutAfterCreate makes the next CreateOrder succeed "remotely"
 	// but return ErrUnavailable to the caller, like a response lost to a
 	// timeout.
 	TimeoutAfterCreate bool
 
 	orders     map[models.SquareOrderID]*payments.OrderState
-	links      map[string]*payments.PaymentLink
-	Requests   []payments.PaymentLinkRequest
-	CreateHits int // distinct payment links actually created
+	created    map[string]models.SquareOrderID
+	Requests   []payments.OrderRequest
+	Payments   []payments.PaymentRequest
+	CreateHits int // distinct Square orders actually created
 	GetCalls   int
 	seq        int
 }
@@ -42,8 +43,8 @@ var (
 
 func New() *Fake {
 	return &Fake{
-		orders: map[models.SquareOrderID]*payments.OrderState{},
-		links:  map[string]*payments.PaymentLink{},
+		orders:  map[models.SquareOrderID]*payments.OrderState{},
+		created: map[string]models.SquareOrderID{},
 	}
 }
 
@@ -88,7 +89,7 @@ func (f *Fake) LookupPrices(_ context.Context, vars []models.SquareVariationID, 
 	return check, nil
 }
 
-func (f *Fake) CreatePaymentLink(_ context.Context, req payments.PaymentLinkRequest) (*payments.PaymentLink, error) {
+func (f *Fake) CreateOrder(_ context.Context, req payments.OrderRequest) (*payments.OrderState, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Requests = append(f.Requests, req)
@@ -96,9 +97,8 @@ func (f *Fake) CreatePaymentLink(_ context.Context, req payments.PaymentLinkRequ
 		return nil, f.CreateErr
 	}
 	// Square replays the original result for a repeated idempotency key.
-	if link, ok := f.links[req.IdempotencyKey]; ok {
-		out := *link
-		out.Order = *f.orders[link.Order.ID]
+	if id, ok := f.created[req.IdempotencyKey]; ok {
+		out := *f.orders[id]
 		return &out, nil
 	}
 
@@ -119,18 +119,36 @@ func (f *Fake) CreatePaymentLink(_ context.Context, req payments.PaymentLinkRequ
 		Fulfillment: payments.FulfillmentProposed,
 	}
 	f.orders[id] = state
-	link := &payments.PaymentLink{ID: fmt.Sprintf("link-%d", f.seq), URL: fmt.Sprintf("https://square.test/pay/%d", f.seq), Order: *state}
-	f.links[req.IdempotencyKey] = link
+	f.created[req.IdempotencyKey] = id
 
 	if f.TimeoutAfterCreate {
 		f.TimeoutAfterCreate = false
 		return nil, fmt.Errorf("fake: %w: context deadline exceeded", payments.ErrUnavailable)
 	}
-	out := *link
+	out := *state
 	return &out, nil
 }
 
-func (f *Fake) unitPrice(l payments.PaymentLinkLine) int64 {
+func (f *Fake) CreatePayment(_ context.Context, req payments.PaymentRequest) (*payments.PaymentResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Payments = append(f.Payments, req)
+	if f.CreateErr != nil {
+		return nil, f.CreateErr
+	}
+	st, ok := f.orders[req.OrderID]
+	if !ok {
+		return nil, fmt.Errorf("fake: %w: order %s not found", payments.ErrRejected, req.OrderID)
+	}
+	st.FullyPaid = true
+	st.PaymentID = "pay-" + string(req.OrderID)
+	st.Total = models.NewMoney(req.Amount.Amount+req.Tip.Amount, req.Amount.Currency)
+	st.Version++
+	out := *st
+	return &payments.PaymentResult{PaymentID: st.PaymentID, Order: out}, nil
+}
+
+func (f *Fake) unitPrice(l payments.OrderLine) int64 {
 	var price int64
 	for _, it := range f.Catalog.Items {
 		for _, v := range it.Variations {

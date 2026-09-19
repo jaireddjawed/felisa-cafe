@@ -31,8 +31,8 @@ export const MILKS: Modifier[] = [
 ];
 
 export const ADD_ONS: Modifier[] = [
-  { id: "maple-foam", label: "Maple cold foam", price: 1 },
-  { id: "ube-cream", label: "Ube whipped cream", price: 1 },
+  { id: "maple-foam", label: "Maple cold foam", price: 0 },
+  { id: "ube-cream", label: "Ube whipped cream", price: 0 },
 ];
 
 export const PRODUCTS: Product[] = [

@@ -1,121 +1,151 @@
 "use client";
 
-import { useState } from "react";
-import { ADD_ONS, MILKS, money, type Product } from "@/lib/menu";
+import { useMemo, useState } from "react";
+import type { ModifierListView, ProductView } from "@/lib/api-types";
 import { useCart } from "@/lib/cart";
 import { Sparkle } from "./doodles";
 
-export function AddToCart({ product }: { product: Product }) {
-  const { add } = useCart();
-  const isDrink = product.category === "signature";
+function initialModifiers(lists: ModifierListView[]) {
+  return lists.flatMap((list) =>
+    list.minSelected > 0 && list.modifiers[0] ? [list.modifiers[0].id] : [],
+  );
+}
 
-  const [base, setBase] = useState(product.bases?.[0] ?? "");
-  const [milk, setMilk] = useState(MILKS[1].id);
-  const [addOns, setAddOns] = useState<string[]>([]);
+function modifierLabel(list: ModifierListView) {
+  const name = list.name.toLowerCase();
+  if (name.includes("milk")) return "Choice of milk";
+  if (name.includes("extra") || name.includes("add")) return "Make it extra";
+  return list.name;
+}
+
+function toggleSelection(
+  selected: string[],
+  list: ModifierListView,
+  modifierId: string,
+) {
+  const ids = new Set(list.modifiers.map((m) => m.id));
+  const inList = selected.filter((id) => ids.has(id));
+  const outsideList = selected.filter((id) => !ids.has(id));
+
+  if (inList.includes(modifierId)) {
+    if (inList.length <= list.minSelected) return selected;
+    return [...outsideList, ...inList.filter((id) => id !== modifierId)];
+  }
+
+  const max = list.maxSelected || list.modifiers.length;
+  const next = max <= 1 ? [modifierId] : [...inList, modifierId].slice(-max);
+  return [...outsideList, ...next];
+}
+
+export function AddToCart({ product }: { product: ProductView }) {
+  const { add, loading, error, clearError } = useCart();
+  const availableVariations = product.variations.filter((v) => v.available);
+
+  const [variationId, setVariationId] = useState(
+    availableVariations[0]?.id ?? "",
+  );
+  const [modifierIds, setModifierIds] = useState(() =>
+    initialModifiers(product.modifierLists),
+  );
   const [qty, setQty] = useState(1);
 
-  const addOnTotal = ADD_ONS.filter((a) => addOns.includes(a.id)).reduce(
-    (n, a) => n + a.price,
+  const variation = availableVariations.find((v) => v.id === variationId);
+  const selectedModifiers = useMemo(
+    () =>
+      product.modifierLists
+        .flatMap((list) => list.modifiers)
+        .filter((modifier) => modifierIds.includes(modifier.id)),
+    [modifierIds, product.modifierLists],
+  );
+  const selectedModifierTotal = selectedModifiers.reduce(
+    (sum, modifier) => sum + modifier.price.amount,
     0,
   );
-  const unitPrice = product.price + addOnTotal;
+  const unitAmount = (variation?.price.amount ?? 0) + selectedModifierTotal;
 
-  function toggleAddOn(id: string) {
-    setAddOns((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id],
+  function submit() {
+    if (!variation) return;
+    void add({
+      variationId: variation.id,
+      modifierIds,
+      quantity: qty,
+    });
+  }
+
+  if (!availableVariations.length) {
+    return (
+      <div className="sticker rounded-3xl bg-lav-100 p-6 font-hand text-2xl text-lav-700">
+        This item is not available online right now.
+      </div>
     );
   }
 
-  function submit() {
-    const options: string[] = [];
-    if (base) options.push(base);
-    if (isDrink && product.ingredients.some((i) => i.includes("milk"))) {
-      options.push(MILKS.find((m) => m.id === milk)!.label);
-    }
-    for (const a of ADD_ONS) {
-      if (addOns.includes(a.id)) options.push(a.label);
-    }
-    add({ slug: product.slug, name: product.name, unitPrice, options }, qty);
-  }
-
-  const takesMilk =
-    isDrink && product.ingredients.some((i) => i.includes("milk"));
-
   return (
     <div className="sticker rounded-3xl bg-lav-100 p-6">
-      {product.bases && (
+      {availableVariations.length > 1 && (
         <fieldset className="mb-5">
           <legend className="font-marker text-base text-lav-800">
             Pick your base
           </legend>
           <div className="mt-2 flex flex-wrap gap-2">
-            {product.bases.map((option) => (
+            {availableVariations.map((option) => (
               <button
-                key={option}
+                key={option.id}
                 type="button"
-                onClick={() => setBase(option)}
+                onClick={() => setVariationId(option.id)}
                 className={`rounded-full border-2 px-4 py-1.5 font-hand text-lg transition ${
-                  base === option
+                  variationId === option.id
                     ? "border-lav-700 bg-lav-600 text-white"
                     : "border-dashed border-lav-400 text-lav-700 hover:bg-lav-300"
                 }`}
               >
-                {option}
+                {option.name}
               </button>
             ))}
           </div>
         </fieldset>
       )}
 
-      {takesMilk && (
-        <fieldset className="mb-5">
+      {product.modifierLists.map((list) => (
+        <fieldset key={list.id} className="mb-5">
           <legend className="font-marker text-base text-lav-800">
-            Choice of milk{" "}
-            <span className="font-hand text-lav-600">— always free</span>
+            {modifierLabel(list)}
+            {list.name.toLowerCase().includes("milk") && (
+              <span className="font-hand text-lav-600"> - always free</span>
+            )}
           </legend>
           <div className="mt-2 flex flex-wrap gap-2">
-            {MILKS.map((option) => (
+            {list.modifiers.map((option) => (
               <button
                 key={option.id}
                 type="button"
-                onClick={() => setMilk(option.id)}
-                className={`rounded-full border-2 px-4 py-1.5 font-hand text-lg transition ${
-                  milk === option.id
-                    ? "border-lav-700 bg-lav-600 text-white"
-                    : "border-dashed border-lav-400 text-lav-700 hover:bg-lav-300"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-      )}
-
-      {isDrink && (
-        <fieldset className="mb-5">
-          <legend className="font-marker text-base text-lav-800">
-            Make it extra
-          </legend>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {ADD_ONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => toggleAddOn(option.id)}
+                onClick={() => {
+                  clearError();
+                  setModifierIds((prev) =>
+                    toggleSelection(prev, list, option.id),
+                  );
+                }}
                 className={`flex items-center gap-2 rounded-full border-2 px-4 py-1.5 font-hand text-lg transition ${
-                  addOns.includes(option.id)
+                  modifierIds.includes(option.id)
                     ? "border-lav-700 bg-lav-600 text-white"
                     : "border-dashed border-lav-400 text-lav-700 hover:bg-lav-300"
                 }`}
               >
-                {addOns.includes(option.id) && <Sparkle size={12} />}
-                {option.label}
-                <span className="opacity-70">+{money(option.price)}</span>
+                {modifierIds.includes(option.id) && <Sparkle size={12} />}
+                {option.name}
+                {option.price.amount !== 0 && (
+                  <span className="opacity-70">+{option.price.formatted}</span>
+                )}
               </button>
             ))}
           </div>
         </fieldset>
+      ))}
+
+      {error && (
+        <p className="mb-3 font-hand text-lg text-lav-800" role="alert">
+          {error}
+        </p>
       )}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -126,7 +156,7 @@ export function AddToCart({ product }: { product: Product }) {
             aria-label="One fewer"
             className="px-4 py-2 font-hand text-xl text-lav-700"
           >
-            −
+            -
           </button>
           <span className="min-w-6 text-center font-hand text-xl">{qty}</span>
           <button
@@ -142,9 +172,10 @@ export function AddToCart({ product }: { product: Product }) {
         <button
           type="button"
           onClick={submit}
-          className="sticker flex-1 rounded-full bg-lav-600 px-6 py-3 font-marker text-base text-white transition hover:-rotate-1 hover:bg-lav-700"
+          disabled={loading || !variation}
+          className="sticker flex-1 rounded-full bg-lav-600 px-6 py-3 font-marker text-base text-white transition hover:-rotate-1 hover:bg-lav-700 disabled:opacity-50"
         >
-          Add to cart · {money(unitPrice * qty)}
+          {loading ? "Adding..." : `Add to cart - $${((unitAmount * qty) / 100).toFixed(2)}`}
         </button>
       </div>
     </div>

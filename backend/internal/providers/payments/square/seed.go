@@ -54,24 +54,35 @@ func (c *Client) SeedSandboxCatalog(ctx context.Context, lists []SeedModifierLis
 	// name -> ID for top-level objects, and "parent/child" -> ID for
 	// variations and modifiers, so re-seeding updates in place.
 	ids := map[string]string{}
+	versions := map[string]int64{}
 	for _, o := range existing {
 		switch {
 		case o.Category != nil && o.Category.CategoryData != nil:
-			ids["category:"+deref(o.Category.CategoryData.Name)] = deref(o.Category.ID)
+			key := "category:" + deref(o.Category.CategoryData.Name)
+			ids[key] = deref(o.Category.ID)
+			versions[key] = deref(o.Category.Version)
 		case o.ModifierList != nil && o.ModifierList.ModifierListData != nil:
 			name := deref(o.ModifierList.ModifierListData.Name)
-			ids["list:"+name] = o.ModifierList.ID
+			key := "list:" + name
+			ids[key] = o.ModifierList.ID
+			versions[key] = deref(o.ModifierList.Version)
 			for _, m := range o.ModifierList.ModifierListData.Modifiers {
 				if m != nil && m.Modifier != nil {
-					ids["modifier:"+name+"/"+deref(m.Modifier.ModifierData.GetName())] = m.Modifier.ID
+					key := "modifier:" + name + "/" + deref(m.Modifier.ModifierData.GetName())
+					ids[key] = m.Modifier.ID
+					versions[key] = deref(m.Modifier.Version)
 				}
 			}
 		case o.Item != nil && o.Item.ItemData != nil:
 			name := deref(o.Item.ItemData.Name)
-			ids["item:"+name] = o.Item.ID
+			key := "item:" + name
+			ids[key] = o.Item.ID
+			versions[key] = deref(o.Item.Version)
 			for _, v := range o.Item.ItemData.Variations {
 				if v != nil && v.ItemVariation != nil {
-					ids["variation:"+name+"/"+deref(v.ItemVariation.ItemVariationData.GetName())] = v.ItemVariation.ID
+					key := "variation:" + name + "/" + deref(v.ItemVariation.ItemVariationData.GetName())
+					ids[key] = v.ItemVariation.ID
+					versions[key] = deref(v.ItemVariation.Version)
 				}
 			}
 		}
@@ -84,6 +95,13 @@ func (c *Client) SeedSandboxCatalog(ctx context.Context, lists []SeedModifierLis
 		ids[key] = id
 		return id
 	}
+	withID := func(key string, object map[string]any) map[string]any {
+		object["id"] = idFor(key)
+		if v := versions[key]; v > 0 {
+			object["version"] = v
+		}
+		return object
+	}
 	usd := func(amount int64) *sq.Money {
 		return &sq.Money{Amount: sq.Int64(amount), Currency: sq.Currency(c.cfg.Currency).Ptr()}
 	}
@@ -95,45 +113,56 @@ func (c *Client) SeedSandboxCatalog(ctx context.Context, lists []SeedModifierLis
 			continue
 		}
 		categories[it.Category] = true
-		objects = append(objects, map[string]any{
+		objects = append(objects, withID("category:"+it.Category, map[string]any{
 			"type":          "CATEGORY",
-			"id":            idFor("category:" + it.Category),
 			"category_data": map[string]any{"name": it.Category},
-		})
+		}))
 	}
 
 	for _, l := range lists {
+		max := l.Max
+		if max == 0 {
+			max = -1
+		}
+		selection := "MULTIPLE"
+		if l.Max == 1 {
+			selection = "SINGLE"
+		}
 		mods := make([]map[string]any, len(l.Modifiers))
 		for i, m := range l.Modifiers {
-			mods[i] = map[string]any{
+			mods[i] = withID("modifier:"+l.Name+"/"+m.Name, map[string]any{
 				"type":          "MODIFIER",
-				"id":            idFor("modifier:" + l.Name + "/" + m.Name),
 				"modifier_data": map[string]any{"name": m.Name, "price_money": usd(m.Price), "ordinal": i},
-			}
+			})
 		}
-		objects = append(objects, map[string]any{
+		objects = append(objects, withID("list:"+l.Name, map[string]any{
 			"type": "MODIFIER_LIST",
-			"id":   idFor("list:" + l.Name),
 			"modifier_list_data": map[string]any{
 				"name": l.Name, "modifiers": mods,
-				"min_selected_modifiers": l.Min, "max_selected_modifiers": l.Max,
+				"min_selected_modifiers": l.Min, "max_selected_modifiers": max,
+				"selection_type": selection,
 			},
-		})
+		}))
 	}
 
 	for _, it := range items {
 		vars := make([]map[string]any, len(it.Variations))
 		for i, v := range it.Variations {
-			vars[i] = map[string]any{
-				"type": "ITEM_VARIATION", "id": idFor("variation:" + it.Name + "/" + v.Name),
+			vars[i] = withID("variation:"+it.Name+"/"+v.Name, map[string]any{
+				"type": "ITEM_VARIATION",
 				"item_variation_data": map[string]any{
 					"name": v.Name, "pricing_type": "FIXED_PRICING", "price_money": usd(v.Price), "ordinal": i,
 				},
-			}
+			})
 		}
 		infos := make([]map[string]any, len(it.ModifierLists))
 		for i, name := range it.ModifierLists {
-			infos[i] = map[string]any{"modifier_list_id": idFor("list:" + name), "enabled": true}
+			infos[i] = map[string]any{
+				"modifier_list_id":       idFor("list:" + name),
+				"enabled":                true,
+				"min_selected_modifiers": -1,
+				"max_selected_modifiers": -1,
+			}
 		}
 		data := map[string]any{
 			"name": it.Name, "description": it.Description, "variations": vars, "modifier_list_info": infos,
@@ -143,9 +172,9 @@ func (c *Client) SeedSandboxCatalog(ctx context.Context, lists []SeedModifierLis
 			data["categories"] = []map[string]any{ref}
 			data["reporting_category"] = ref
 		}
-		objects = append(objects, map[string]any{
-			"type": "ITEM", "id": idFor("item:" + it.Name), "item_data": data,
-		})
+		objects = append(objects, withID("item:"+it.Name, map[string]any{
+			"type": "ITEM", "item_data": data,
+		}))
 	}
 
 	n, err := c.batchUpsertSeed(ctx, objects)

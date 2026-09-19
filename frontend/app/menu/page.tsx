@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { PRODUCTS, SHOP } from "@/lib/menu";
+import { SHOP } from "@/lib/menu";
+import { menuApi } from "@/lib/pocketbase";
 import { ProductCard } from "../components/product-card";
 import { CatFace, Sparkle, SquiggleRule } from "../components/doodles";
 
@@ -19,7 +20,9 @@ const SECTIONS = [
   { key: "merch" as const, title: "Merch", note: "Drawn by the same hand" },
 ];
 
-export default function MenuPage() {
+export default async function MenuPage() {
+  const products = await menuApi.listProducts();
+
   return (
     <div className="mx-auto max-w-6xl px-5 py-14">
       <header className="relative">
@@ -40,7 +43,7 @@ export default function MenuPage() {
       </header>
 
       {SECTIONS.map((section) => {
-        const items = PRODUCTS.filter((p) => p.category === section.key);
+        const items = products.filter((p) => p.category === section.key);
         return (
           <section key={section.key} className="mt-16">
             <div className="flex flex-wrap items-end gap-3">
@@ -58,6 +61,12 @@ export default function MenuPage() {
           </section>
         );
       })}
+
+      {products.length === 0 && (
+        <p className="mt-16 rounded-3xl border-2 border-dashed border-lav-400 bg-lav-100 px-5 py-6 font-hand text-2xl text-lav-700">
+          The online menu is still syncing. Check back in a minute.
+        </p>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-// Package checkout turns a cart into a Square-hosted checkout.
+// Package checkout turns a cart into a Square order paid by the Web Payments SDK.
 //
 //	cart --price from cache--> revalidate with Square --> local order (pending_payment)
-//	     --> Square Order + payment link (idempotent) --> redirect to Square
+//	     --> Square Order (idempotent) --> Web Payments SDK token --> Square Payment
 //
 // Payment is confirmed later, only by Square (see package orders).
 //
@@ -53,7 +53,11 @@ var (
 
 type Config struct {
 	// PublicSiteURL is the storefront origin Square redirects back to.
-	PublicSiteURL string
+	PublicSiteURL       string
+	SquareApplicationID string
+	SquareLocationID    string
+	SquareEnvironment   string
+	AllowTipping        bool
 }
 
 type Service struct {
@@ -82,15 +86,31 @@ type Request struct {
 }
 
 type Result struct {
-	Order       models.Order
-	CheckoutURL string
+	Order models.Order
 	// AccessToken lets a guest view the order later. Only returned for guest
 	// orders; only its hash is stored.
 	AccessToken string
+	Config      PublicConfig
 }
 
-// Checkout validates the cart against Square and returns a hosted checkout
-// URL. See the package doc for the idempotency guarantees.
+type PublicConfig struct {
+	ApplicationID string
+	LocationID    string
+	Environment   string
+	AllowTipping  bool
+}
+
+type PayRequest struct {
+	OrderID        models.OrderID
+	UserID         models.UserID
+	AccessToken    string
+	SourceID       string
+	TipAmount      int64
+	IdempotencyKey string
+}
+
+// Checkout validates the cart against Square and creates a pending Square
+// order. See the package doc for the idempotency guarantees.
 func (s *Service) Checkout(ctx context.Context, req Request) (*Result, error) {
 	if s.square == nil || s.catalog == nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, payments.ErrNotConfigured)
@@ -175,7 +195,7 @@ func (s *Service) Checkout(ctx context.Context, req Request) (*Result, error) {
 		return nil, err
 	}
 
-	res, err := s.createLink(ctx, order)
+	res, err := s.createSquareOrder(ctx, order)
 	if err != nil {
 		return nil, err
 	}
@@ -219,11 +239,11 @@ func (s *Service) resume(ctx context.Context, o models.Order, req Request) (*Res
 		}
 	}
 
-	if o.Square.CheckoutURL != "" {
-		return &Result{Order: o, CheckoutURL: o.Square.CheckoutURL, AccessToken: accessToken}, nil
+	if o.Square.OrderID != "" {
+		return &Result{Order: o, AccessToken: accessToken, Config: s.publicConfig()}, nil
 	}
-	// No link stored: the earlier Square call failed or timed out.
-	res, err := s.createLink(ctx, o)
+	// No Square order stored: the earlier provider call failed or timed out.
+	res, err := s.createSquareOrder(ctx, o)
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +254,9 @@ func (s *Service) resume(ctx context.Context, o models.Order, req Request) (*Res
 	return res, nil
 }
 
-// createLink asks Square for the order + payment link and stores the result.
-func (s *Service) createLink(ctx context.Context, o models.Order) (*Result, error) {
-	link, err := s.square.CreatePaymentLink(ctx, s.linkRequest(o))
+// createSquareOrder asks Square for the order and stores the result.
+func (s *Service) createSquareOrder(ctx context.Context, o models.Order) (*Result, error) {
+	state, err := s.square.CreateOrder(ctx, s.orderRequest(o))
 	if err != nil {
 		if errors.Is(err, payments.ErrRejected) {
 			// Definitive: this order can never be created as-is.
@@ -249,7 +269,7 @@ func (s *Service) createLink(ctx context.Context, o models.Order) (*Result, erro
 		}
 		// Ambiguous: leave the order pending with no link. A retry with the
 		// same client key rebuilds the identical Square request.
-		s.log.Warn("payment link creation failed; retry is safe", "order", o.ID, "error", err)
+		s.log.Warn("square order creation failed; retry is safe", "order", o.ID, "error", err)
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 
@@ -260,15 +280,13 @@ func (s *Service) createLink(ctx context.Context, o models.Order) (*Result, erro
 		if err != nil {
 			return err
 		}
-		cur.Square.PaymentLinkID = link.ID
-		cur.Square.CheckoutURL = link.URL
 		if cur.Square.OrderID == "" {
-			cur.Square.OrderID = link.Order.ID
-			cur.Square.OrderVersion = link.Order.Version
+			cur.Square.OrderID = state.ID
+			cur.Square.OrderVersion = state.Version
 		}
 		// Square computed the authoritative total (taxes, discounts).
-		if link.Order.Total.Currency != "" && link.Order.Total.Amount > 0 {
-			cur.Total, cur.Tax = link.Order.Total, link.Order.Tax
+		if state.Total.Currency != "" && state.Total.Amount > 0 {
+			cur.Total, cur.Tax = state.Total, state.Tax
 		}
 		if err := tx.Orders.Save(ctx, &cur); err != nil {
 			return err
@@ -277,30 +295,95 @@ func (s *Service) createLink(ctx context.Context, o models.Order) (*Result, erro
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("store payment link: %w", err)
+		return nil, fmt.Errorf("store square order: %w", err)
 	}
-	return &Result{Order: saved, CheckoutURL: link.URL}, nil
+	return &Result{Order: saved, Config: s.publicConfig()}, nil
 }
 
-// linkRequest is a pure function of the persisted order, which is what
+// Pay charges an existing pending Square order with a Web Payments SDK token.
+func (s *Service) Pay(ctx context.Context, req PayRequest) (*Result, error) {
+	if s.square == nil {
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, payments.ErrNotConfigured)
+	}
+	if len(req.IdempotencyKey) < 16 || len(req.IdempotencyKey) > 255 {
+		return nil, fmt.Errorf("%w: idempotency key must be 16-255 characters", ErrIdempotencyConflict)
+	}
+	if strings.TrimSpace(req.SourceID) == "" {
+		return nil, ErrRejected
+	}
+
+	o, err := s.store.Orders.FindByID(ctx, req.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	if !canPay(o, req) {
+		return nil, models.ErrNotFound
+	}
+	if o.Status != models.OrderPendingPayment || o.Square.OrderID == "" {
+		return &Result{Order: o}, nil
+	}
+	if req.TipAmount < 0 {
+		return nil, ErrRejected
+	}
+	tip := models.NewMoney(req.TipAmount, o.Total.Currency)
+	if tip.Amount > 0 && tip.Amount > maxTip(o.Total.Amount) {
+		return nil, ErrRejected
+	}
+
+	paid, err := s.square.CreatePayment(ctx, payments.PaymentRequest{
+		IdempotencyKey: req.IdempotencyKey,
+		OrderID:        o.Square.OrderID,
+		LocalOrderID:   o.ID,
+		SourceID:       req.SourceID,
+		Amount:         o.Total,
+		Tip:            tip,
+		Customer:       o.Customer,
+	})
+	if err != nil {
+		if errors.Is(err, payments.ErrRejected) {
+			return nil, fmt.Errorf("%w: %w", ErrRejected, err)
+		}
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+
+	var saved models.Order
+	err = s.store.RunInTx(ctx, func(tx *database.Store) error {
+		cur, err := tx.Orders.FindByID(ctx, o.ID)
+		if err != nil {
+			return err
+		}
+		cur.Square.PaymentID = paid.PaymentID
+		applyPayment(&cur, paid.Order, s.eta, ctx)
+		if err := tx.Orders.Save(ctx, &cur); err != nil {
+			return err
+		}
+		saved = cur
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store payment: %w", err)
+	}
+	return &Result{Order: saved}, nil
+}
+
+// orderRequest is a pure function of the persisted order, which is what
 // makes retries with the same idempotency key safe.
-func (s *Service) linkRequest(o models.Order) payments.PaymentLinkRequest {
-	lines := make([]payments.PaymentLinkLine, len(o.Items))
+func (s *Service) orderRequest(o models.Order) payments.OrderRequest {
+	lines := make([]payments.OrderLine, len(o.Items))
 	for i, it := range o.Items {
 		mods := make([]models.SquareModifierID, len(it.Modifiers))
 		for j, m := range it.Modifiers {
 			mods[j] = m.ModifierID
 		}
-		lines[i] = payments.PaymentLinkLine{VariationID: it.VariationID, ModifierIDs: mods, Quantity: it.Quantity, Note: it.Note}
+		lines[i] = payments.OrderLine{VariationID: it.VariationID, ModifierIDs: mods, Quantity: it.Quantity, Note: it.Note}
 	}
-	return payments.PaymentLinkRequest{
+	return payments.OrderRequest{
 		IdempotencyKey: "felisa-order-" + string(o.ID),
 		LocalOrderID:   o.ID,
 		Lines:          lines,
 		Customer:       o.Customer,
 		Notes:          o.Notes,
 		PrepTime:       max(o.EstimatedReadyAt.Sub(o.Created), time.Minute),
-		RedirectURL:    strings.TrimRight(s.cfg.PublicSiteURL, "/") + "/orders/" + string(o.ID),
 	}
 }
 
@@ -345,4 +428,44 @@ func orDefault(v, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func canPay(o models.Order, req PayRequest) bool {
+	if o.UserID != "" {
+		return req.UserID == o.UserID
+	}
+	return tokens.Matches(o.AccessTokenHash, req.AccessToken)
+}
+
+func maxTip(total int64) int64 {
+	return max(10_000, total)
+}
+
+func applyPayment(o *models.Order, st payments.OrderState, estimator eta.Estimator, ctx context.Context) {
+	wasPaid := o.Status.IsPaid()
+	o.Square.OrderID = st.ID
+	o.Square.OrderVersion = st.Version
+	o.Square.PaymentID = st.PaymentID
+	if st.Total.Currency != "" && st.Total.Amount > 0 {
+		o.Total, o.Tax = st.Total, st.Tax
+	}
+	if st.FullyPaid {
+		if !wasPaid {
+			o.Status = models.OrderPaid
+			o.PaidAt = time.Now().UTC()
+			if ready, err := estimator.Estimate(ctx, o.Items); err == nil {
+				o.EstimatedReadyAt = ready
+			}
+		}
+	}
+	o.LastSyncedAt = time.Now().UTC()
+}
+
+func (s *Service) publicConfig() PublicConfig {
+	return PublicConfig{
+		ApplicationID: s.cfg.SquareApplicationID,
+		LocationID:    s.cfg.SquareLocationID,
+		Environment:   orDefault(s.cfg.SquareEnvironment, "sandbox"),
+		AllowTipping:  s.cfg.AllowTipping,
+	}
 }

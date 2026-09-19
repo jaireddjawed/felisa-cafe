@@ -47,13 +47,9 @@ export async function signup(
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
 
   if (!name || !email || !password) {
     return { error: "Fill in your name, email, and password." };
-  }
-  if (password !== passwordConfirm) {
-    return { error: "Passwords don't match." };
   }
 
   const pb = await createServerClient();
@@ -63,7 +59,7 @@ export async function signup(
       name,
       email,
       password,
-      passwordConfirm,
+      passwordConfirm: password,
     });
     await pb.collection("users").authWithPassword(email, password);
   } catch (err) {

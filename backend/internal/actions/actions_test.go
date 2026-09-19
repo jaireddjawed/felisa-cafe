@@ -12,7 +12,6 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 
 	"felisa-cafe/backend/internal/actions"
-	"felisa-cafe/backend/internal/models"
 	"felisa-cafe/backend/internal/providers/payments"
 	"felisa-cafe/backend/internal/providers/payments/paymentstest"
 	"felisa-cafe/backend/internal/routes"
@@ -108,7 +107,7 @@ func TestGuestFlowOverHTTP(t *testing.T) {
 	status, body = s.do("POST", "/api/checkout", map[string]string{"customerName": "Ana", "customerEmail": "ana@example.com"},
 		map[string]string{actions.CartTokenHeader: cart.CartToken, actions.IdempotencyHeader: "idem-0000000000000001"})
 	co := decode[views.CheckoutView](t, body)
-	if status != 201 || co.CheckoutURL == "" || co.OrderToken == "" || co.Total.Amount != 1700 {
+	if status != 201 || co.OrderToken == "" || co.Total.Amount != 1700 || co.Square.LocationID == "" {
 		t.Fatalf("checkout: %d %s", status, body)
 	}
 
@@ -117,22 +116,18 @@ func TestGuestFlowOverHTTP(t *testing.T) {
 		t.Errorf("order without token: %d, want 404", status)
 	}
 	status, body = s.do("GET", path, nil, map[string]string{actions.OrderTokenHeader: co.OrderToken})
-	if o := decode[views.OrderView](t, body); status != 200 || o.Status != "pending_payment" || o.CheckoutURL == "" {
+	if o := decode[views.OrderView](t, body); status != 200 || o.Status != "pending_payment" {
 		t.Errorf("order: %d %s", status, body)
 	}
 
-	// Square confirms payment via a (verified) webhook.
-	stored, err := s.env.Store.Orders.FindByID(t.Context(), models.OrderID(co.OrderID))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.env.Square.Pay(stored.Square.OrderID)
-	ev, _ := json.Marshal(payments.WebhookEvent{ID: "evt-paid", Type: "payment.updated", Kind: payments.WebhookOrderChanged, OrderID: stored.Square.OrderID})
-	if status, body := s.do("POST", "/api/webhooks/square", string(ev), map[string]string{"X-Square-Hmacsha256-Signature": paymentstest.ValidSignature}); status != 200 {
-		t.Fatalf("webhook: %d %s", status, body)
+	status, body = s.do("POST", "/api/checkout/pay",
+		map[string]any{"orderId": co.OrderID, "sourceId": "cnon:card-nonce-ok", "tipAmount": 200},
+		map[string]string{actions.OrderTokenHeader: co.OrderToken, actions.IdempotencyHeader: "pay-0000000000000001"})
+	if status != 200 {
+		t.Fatalf("pay: %d %s", status, body)
 	}
 	status, body = s.do("GET", path, nil, map[string]string{actions.OrderTokenHeader: co.OrderToken})
-	if o := decode[views.OrderView](t, body); status != 200 || o.Status != "paid" || o.PaidAt == nil || o.CheckoutURL != "" {
+	if o := decode[views.OrderView](t, body); status != 200 || o.Status != "paid" || o.PaidAt == nil || o.Total.Amount != 1900 {
 		t.Errorf("paid order: %d %s", status, body)
 	}
 }

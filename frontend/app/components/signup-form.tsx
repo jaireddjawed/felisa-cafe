@@ -52,24 +52,6 @@ export function SignupForm() {
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="passwordConfirm"
-          className="font-hand text-xl text-lav-700"
-        >
-          Confirm password
-        </label>
-        <input
-          id="passwordConfirm"
-          name="passwordConfirm"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className="sticker rounded-xl bg-white px-4 py-2 font-hand text-xl text-lav-800 outline-none"
-        />
-      </div>
-
       {state?.error && (
         <p className="font-hand text-lg text-red-600">{state.error}</p>
       )}

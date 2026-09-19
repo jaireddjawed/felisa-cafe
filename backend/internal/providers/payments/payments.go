@@ -39,9 +39,11 @@ type Catalog interface {
 	LookupPrices(ctx context.Context, variations []models.SquareVariationID, modifiers []models.SquareModifierID) (*PriceCheck, error)
 }
 
-// Checkout creates hosted checkouts and reads back order state.
+// Checkout creates Square orders, takes Web Payments SDK payments, and reads
+// back order state.
 type Checkout interface {
-	CreatePaymentLink(ctx context.Context, req PaymentLinkRequest) (*PaymentLink, error)
+	CreateOrder(ctx context.Context, req OrderRequest) (*OrderState, error)
+	CreatePayment(ctx context.Context, req PaymentRequest) (*PaymentResult, error)
 	GetOrder(ctx context.Context, id models.SquareOrderID) (*OrderState, error)
 }
 
@@ -106,32 +108,40 @@ type LiveModifier struct {
 // Checkout
 // ---------------------------------------------------------------------------
 
-type PaymentLinkRequest struct {
+type OrderRequest struct {
 	// IdempotencyKey must be stable for a given local order so a retried
-	// request (e.g. after a timeout) returns the link created the first
+	// request (e.g. after a timeout) returns the order created the first
 	// time instead of a second order.
 	IdempotencyKey string
 	LocalOrderID   models.OrderID
-	Lines          []PaymentLinkLine
+	Lines          []OrderLine
 	Customer       models.Contact
 	Notes          string
 	// PrepTime is how long from now the order is expected to take; sent to
 	// Square as the pickup fulfillment's prep time.
-	PrepTime    time.Duration
-	RedirectURL string
+	PrepTime time.Duration
 }
 
-type PaymentLinkLine struct {
+type OrderLine struct {
 	VariationID models.SquareVariationID
 	ModifierIDs []models.SquareModifierID
 	Quantity    int64
 	Note        string
 }
 
-type PaymentLink struct {
-	ID    string
-	URL   string
-	Order OrderState
+type PaymentRequest struct {
+	IdempotencyKey string
+	OrderID        models.SquareOrderID
+	LocalOrderID   models.OrderID
+	SourceID       string
+	Amount         models.Money
+	Tip            models.Money
+	Customer       models.Contact
+}
+
+type PaymentResult struct {
+	PaymentID string
+	Order     OrderState
 }
 
 // OrderLifecycle mirrors Square's order state.

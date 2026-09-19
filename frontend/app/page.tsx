@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PRODUCTS, SHOP, SIGNATURES } from "@/lib/menu";
+import { SHOP } from "@/lib/menu";
+import { menuApi } from "@/lib/pocketbase";
 import { ProductCard } from "./components/product-card";
 import {
   CatFace,
@@ -9,8 +10,10 @@ import {
   SquiggleRule,
 } from "./components/doodles";
 
-export default function HomePage() {
-  const merch = PRODUCTS.filter((p) => p.category !== "signature");
+export default async function HomePage() {
+  const products = await menuApi.listProducts();
+  const signatures = products.filter((p) => p.category === "signature");
+  const merch = products.filter((p) => p.category !== "signature");
 
   return (
     <>
@@ -67,7 +70,7 @@ export default function HomePage() {
           <div className="relative grid place-items-center">
             <div className="blob absolute inset-6 bg-lav-300/70" />
             <div className="relative flex items-end gap-2 sm:gap-5">
-              {SIGNATURES.slice(0, 3).map((drink, i) => (
+              {signatures.slice(0, 3).map((drink, i) => (
                 <DrinkGlass
                   key={drink.slug}
                   top={drink.pour.top}
@@ -114,7 +117,7 @@ export default function HomePage() {
         <SquiggleRule className="mt-3 h-5 w-full text-lav-400" />
 
         <div className="mt-10 grid gap-7 sm:grid-cols-2 lg:grid-cols-4">
-          {SIGNATURES.map((drink, i) => (
+          {signatures.map((drink, i) => (
             <ProductCard key={drink.slug} product={drink} index={i} />
           ))}
         </div>
@@ -161,7 +164,7 @@ export default function HomePage() {
                 Optional add-ons
               </dt>
               <dd className="mt-2 flex flex-wrap gap-2">
-                {["maple cold foam +$1", "ube whipped cream +$1"].map((x) => (
+                {["maple cold foam", "ube whipped cream"].map((x) => (
                   <span
                     key={x}
                     className="rounded-full bg-lav-600 px-4 py-1.5 font-hand text-lg text-white"

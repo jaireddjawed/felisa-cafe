@@ -45,7 +45,13 @@ func NewEnv(t testing.TB) *Env {
 	e.ETA = eta.NewQueueEstimator(eta.Config{BasePrep: 2 * time.Minute, PerItem: time.Minute, Buffer: time.Minute, Capacity: 1}, e.Store.Orders)
 	e.Carts = cart.New(e.Store)
 	e.Orders = orders.New(e.Store, e.Square, e.ETA, log)
-	e.Checkout = checkout.New(checkout.Config{PublicSiteURL: "https://felisa.test"},
+	e.Checkout = checkout.New(checkout.Config{
+		PublicSiteURL:       "https://felisa.test",
+		SquareApplicationID: "sandbox-app",
+		SquareLocationID:    "LOC_MAIN",
+		SquareEnvironment:   "sandbox",
+		AllowTipping:        true,
+	},
 		e.Store, e.Carts, e.Square, e.Square, e.ETA, func() { e.StaleCatalogCalls.Add(1) }, log)
 	e.Webhooks = webhooks.New(e.Store, e.Orders, e.Catalog, log)
 	return e

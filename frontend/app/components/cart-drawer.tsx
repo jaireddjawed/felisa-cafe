@@ -2,11 +2,20 @@
 
 import Link from "next/link";
 import { useCart } from "@/lib/cart";
-import { money } from "@/lib/menu";
 import { CatFace, Sparkle } from "./doodles";
 
 export function CartDrawer() {
-  const { lines, subtotal, isOpen, close, setQty, remove } = useCart();
+  const {
+    lines,
+    subtotal,
+    isOpen,
+    loading,
+    error,
+    valid,
+    close,
+    setQty,
+    remove,
+  } = useCart();
 
   return (
     <div
@@ -63,20 +72,25 @@ export function CartDrawer() {
             <ul className="flex flex-col gap-3">
               {lines.map((line) => (
                 <li
-                  key={line.id}
+                  key={line.lineId}
                   className="sticker rounded-2xl bg-white/80 px-4 py-3"
                 >
                   <div className="flex items-baseline gap-2">
                     <p className="font-marker text-lg text-lav-800">
-                      {line.name}
+                      {line.productName}
                     </p>
                     <p className="ml-auto font-hand text-xl text-lav-700">
-                      {money(line.unitPrice * line.qty)}
+                      {line.total.formatted}
                     </p>
                   </div>
-                  {line.options.length > 0 && (
-                    <p className="mt-1 font-hand text-lg text-lav-600">
-                      {line.options.join(" · ")}
+                  <p className="mt-1 font-hand text-lg text-lav-600">
+                    {[line.variationName, ...line.modifiers.map((m) => m.name)]
+                      .filter(Boolean)
+                      .join(" - ")}
+                  </p>
+                  {line.problem && (
+                    <p className="mt-1 font-hand text-base text-lav-800">
+                      {line.problem}
                     </p>
                   )}
                   <div className="mt-2 flex items-center gap-2">
@@ -84,20 +98,20 @@ export function CartDrawer() {
                       <button
                         type="button"
                         tabIndex={isOpen ? 0 : -1}
-                        onClick={() => setQty(line.id, line.qty - 1)}
-                        aria-label={`One fewer ${line.name}`}
+                        onClick={() => void setQty(line.lineId, line.quantity - 1)}
+                        aria-label={`One fewer ${line.productName}`}
                         className="px-3 py-0.5 font-hand text-xl text-lav-700"
                       >
-                        −
+                        -
                       </button>
                       <span className="min-w-6 text-center font-hand text-xl">
-                        {line.qty}
+                        {line.quantity}
                       </span>
                       <button
                         type="button"
                         tabIndex={isOpen ? 0 : -1}
-                        onClick={() => setQty(line.id, line.qty + 1)}
-                        aria-label={`One more ${line.name}`}
+                        onClick={() => void setQty(line.lineId, line.quantity + 1)}
+                        aria-label={`One more ${line.productName}`}
                         className="px-3 py-0.5 font-hand text-xl text-lav-700"
                       >
                         +
@@ -106,7 +120,7 @@ export function CartDrawer() {
                     <button
                       type="button"
                       tabIndex={isOpen ? 0 : -1}
-                      onClick={() => remove(line.id)}
+                      onClick={() => void remove(line.lineId)}
                       className="ml-auto font-hand text-lg text-lav-500 underline decoration-dashed hover:text-lav-800"
                     >
                       remove
@@ -122,20 +136,39 @@ export function CartDrawer() {
           <div className="flex items-baseline">
             <span className="font-hand text-xl text-lav-700">Subtotal</span>
             <span className="ml-auto font-marker text-2xl text-lav-800">
-              {money(subtotal)}
+              {subtotal.formatted}
             </span>
           </div>
           <p className="mt-1 font-hand text-lg text-lav-600">
-            Pickup only for now — tax added at checkout.
+            Pickup only for now - tax added at checkout.
           </p>
-          <button
-            type="button"
-            tabIndex={isOpen ? 0 : -1}
-            disabled={lines.length === 0}
-            className="sticker mt-3 w-full rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
-          >
-            Checkout
-          </button>
+          {error && (
+            <p className="mt-2 font-hand text-lg text-lav-800" role="alert">
+              {error}
+            </p>
+          )}
+          {lines.length > 0 && (
+            <Link
+              href="/checkout"
+              onClick={close}
+              tabIndex={isOpen ? 0 : -1}
+              className={`sticker mt-3 block w-full rounded-full bg-lav-600 py-3 text-center font-marker text-lg text-white transition hover:bg-lav-700 ${
+                loading || !valid ? "pointer-events-none opacity-40" : ""
+              }`}
+            >
+              Checkout
+            </Link>
+          )}
+          {lines.length === 0 && (
+            <button
+              type="button"
+                tabIndex={isOpen ? 0 : -1}
+              disabled
+              className="sticker mt-3 w-full rounded-full bg-lav-600 py-3 font-marker text-lg text-white opacity-40"
+            >
+              Checkout
+            </button>
+          )}
         </footer>
       </aside>
     </div>

@@ -19,7 +19,7 @@ var sandboxModifierLists = []square.SeedModifierList{
 		// Any number of add-ons.
 		Name: "Add-Ons", Min: 0, Max: 0,
 		Modifiers: []square.SeedModifier{
-			{Name: "Maple Cold Foam", Price: 100}, {Name: "Ube Whipped Cream", Price: 100},
+			{Name: "Maple Cold Foam", Price: 0}, {Name: "Ube Whipped Cream", Price: 0},
 		},
 	},
 }

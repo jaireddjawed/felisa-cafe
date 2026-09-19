@@ -242,11 +242,11 @@ func TestOrderStatePaidOnlyWithFullTender(t *testing.T) {
 	}
 }
 
-func TestCreatePaymentLinkBuildsCatalogOrder(t *testing.T) {
+func TestCreateOrderBuildsCatalogOrder(t *testing.T) {
 	var gotBody map[string]any
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v2/online-checkout/payment-links" {
+		if r.URL.Path != "/v2/orders" {
 			http.NotFound(w, r)
 			return
 		}
@@ -254,28 +254,26 @@ func TestCreatePaymentLinkBuildsCatalogOrder(t *testing.T) {
 		raw, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(raw, &gotBody)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"payment_link":{"id":"PL1","version":1,"order_id":"SQO1","url":"https://square.link/u/abc"},
-			"related_resources":{"orders":[{"id":"SQO1","location_id":"LOC_MAIN","version":1,"state":"OPEN",
-			"total_money":{"amount":1870,"currency":"USD"},"total_tax_money":{"amount":170,"currency":"USD"}}]}}`)
+		_, _ = io.WriteString(w, `{"order":{"id":"SQO1","location_id":"LOC_MAIN","version":1,"state":"OPEN",
+			"total_money":{"amount":1870,"currency":"USD"},"total_tax_money":{"amount":170,"currency":"USD"}}}`)
 	}))
 	defer srv.Close()
 
 	c := newTestClient(t, srv.URL)
-	link, err := c.CreatePaymentLink(context.Background(), payments.PaymentLinkRequest{
+	created, err := c.CreateOrder(context.Background(), payments.OrderRequest{
 		IdempotencyKey: "felisa-order-abc",
 		LocalOrderID:   "abc",
-		Lines: []payments.PaymentLinkLine{{
+		Lines: []payments.OrderLine{{
 			VariationID: "VAR_ESP", ModifierIDs: []models.SquareModifierID{"MOD_OAT", "MOD_FOAM"}, Quantity: 2, Note: "less ice",
 		}},
-		Customer:    models.Contact{Name: "Ana", Email: "ana@example.com", Phone: "+15555550100"},
-		PrepTime:    11*time.Minute + 20*time.Second,
-		RedirectURL: "https://felisa.test/orders/abc",
+		Customer: models.Contact{Name: "Ana", Email: "ana@example.com", Phone: "+15555550100"},
+		PrepTime: 11*time.Minute + 20*time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if link.URL != "https://square.link/u/abc" || link.Order.ID != "SQO1" || link.Order.Total.Amount != 1870 {
-		t.Errorf("link = %+v", link)
+	if created.ID != "SQO1" || created.Total.Amount != 1870 {
+		t.Errorf("order = %+v", created)
 	}
 	if gotAuth != "Bearer EAAA-test-token" {
 		t.Errorf("Authorization = %q", gotAuth)
@@ -302,9 +300,6 @@ func TestCreatePaymentLinkBuildsCatalogOrder(t *testing.T) {
 	}
 	if order["pricing_options"].(map[string]any)["auto_apply_taxes"] != true {
 		t.Error("taxes must be applied by Square")
-	}
-	if gotBody["checkout_options"].(map[string]any)["redirect_url"] != "https://felisa.test/orders/abc" {
-		t.Errorf("checkout_options = %v", gotBody["checkout_options"])
 	}
 }
 
