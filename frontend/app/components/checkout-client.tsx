@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { orderApi } from "@/lib/pocketbase";
+import { useCart } from "@/lib/cart";
 import type { CheckoutView } from "@/lib/api-types";
-import { SquiggleRule } from "./doodles";
+import { CatFace, Sparkle, SquiggleRule } from "./doodles";
 
 const CART_TOKEN_KEY = "felisa-cart-token";
 const ORDER_TOKEN_KEY = "felisa-order-token";
@@ -46,6 +47,7 @@ function sdkURL(environment: string) {
 
 export function CheckoutClient({ contact }: { contact?: Contact }) {
   const router = useRouter();
+  const { lines, subtotal } = useCart();
   const [name, setName] = useState(contact?.name ?? "");
   const [email, setEmail] = useState(contact?.email ?? "");
   const [checkout, setCheckout] = useState<CheckoutView | null>(null);
@@ -157,6 +159,33 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
     }
   }
 
+  if (lines.length === 0 && !checkout) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-12">
+        <Link
+          href="/menu"
+          className="font-hand text-xl text-lav-600 underline decoration-dashed hover:text-lav-800"
+        >
+          back to the menu
+        </Link>
+        <h1 className="mt-4 font-marker text-4xl text-lav-800 sm:text-5xl">
+          Checkout
+        </h1>
+        <SquiggleRule className="my-5 h-5 w-full text-lav-400" />
+        <div className="grid place-items-center gap-3 py-16 text-center">
+          <Sparkle size={32} className="twinkle text-lav-400" />
+          <p className="font-hand text-2xl text-lav-700">Your cart is empty.</p>
+          <Link
+            href="/menu"
+            className="sticker mt-2 rounded-full bg-lav-600 px-6 py-2.5 font-hand text-xl text-white"
+          >
+            See the menu
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-5 py-12">
       <Link
@@ -170,122 +199,199 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
       </h1>
       <SquiggleRule className="my-5 h-5 w-full text-lav-400" />
 
-      {!checkout && (
-        <form onSubmit={start} className="sticker grid gap-4 rounded-3xl bg-lav-100 p-6">
-          {!contact && (
-            <>
-              <label className="grid gap-1 font-hand text-xl text-lav-700">
-                Name
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
-                />
-              </label>
-              <label className="grid gap-1 font-hand text-xl text-lav-700">
-                Email
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
-                />
-              </label>
-            </>
-          )}
-          <button
-            type="submit"
-            disabled={busy}
-            className="sticker rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
-          >
-            {busy ? "Starting..." : contact ? "Continue to payment" : "Continue"}
-          </button>
-        </form>
+      {message && (
+        <p
+          className="sticker mb-5 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 font-hand text-lg text-rose-800"
+          role="alert"
+        >
+          {message}
+        </p>
       )}
 
-      {checkout && (
-        <div className="grid gap-5">
-          <Script src={sdkURL(checkout.square.environment)} onLoad={() => setScriptReady(true)} />
+      <div className="grid gap-5">
+        {/* Full Order Review Card */}
+        <section className="sticker rounded-3xl bg-lav-100 p-6">
+          <div className="flex items-center gap-2 border-b-2 border-dashed border-lav-300 pb-3">
+            <CatFace size={24} className="text-lav-600" />
+            <h2 className="font-marker text-2xl text-lav-800">Your order</h2>
+          </div>
 
-          <section className="sticker rounded-3xl bg-lav-100 p-6">
+          {lines.length > 0 && (
+            <ul className="mt-4 flex flex-col divide-y-2 divide-dashed divide-lav-200">
+              {lines.map((line) => (
+                <li key={line.lineId} className="py-3 first:pt-0 last:pb-0">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="font-marker text-lg text-lav-800">
+                      <span className="mr-2 font-hand text-xl font-bold text-lav-700">
+                        {line.quantity}×
+                      </span>
+                      {line.productName}
+                    </p>
+                    <p className="font-hand text-xl text-lav-700">
+                      {line.total.formatted}
+                    </p>
+                  </div>
+                  <p className="mt-0.5 font-hand text-base text-lav-600">
+                    {[line.variationName, ...line.modifiers.map((m) => m.name)]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  {line.note && (
+                    <p className="mt-0.5 font-hand text-sm italic text-lav-500">
+                      Note: {line.note}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 border-t-2 border-dashed border-lav-300 pt-4">
             <div className="flex font-hand text-xl text-lav-700">
               <span>Subtotal</span>
-              <span className="ml-auto">{checkout.subtotal.formatted}</span>
+              <span className="ml-auto">
+                {checkout ? checkout.subtotal.formatted : subtotal.formatted}
+              </span>
             </div>
             <div className="mt-1 flex font-hand text-xl text-lav-700">
               <span>Tax</span>
-              <span className="ml-auto">{checkout.tax.formatted}</span>
+              <span className="ml-auto">
+                {checkout ? checkout.tax.formatted : "$0.00"}
+              </span>
             </div>
-            {tipAmount > 0 && (
+            {tipAmount > 0 && checkout && (
               <div className="mt-1 flex font-hand text-xl text-lav-700">
                 <span>Tip</span>
-                <span className="ml-auto">{money(tipAmount, checkout.total.currency)}</span>
+                <span className="ml-auto">
+                  {money(tipAmount, checkout.total.currency)}
+                </span>
               </div>
             )}
             <div className="mt-3 flex items-baseline border-t-2 border-dashed border-lav-300 pt-3">
               <span className="font-hand text-2xl text-lav-700">Total</span>
               <span className="ml-auto font-marker text-3xl text-lav-800">
-                {money(totalWithTip, checkout.total.currency)}
+                {checkout
+                  ? money(totalWithTip, checkout.total.currency)
+                  : subtotal.formatted}
               </span>
             </div>
-          </section>
+          </div>
+        </section>
 
-          {checkout.allowTipping && (
-            <section className="sticker rounded-3xl bg-lav-100 p-6">
-              <h2 className="font-marker text-xl text-lav-800">Add a tip</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {tipOptions.map((option) => (
-                  <button
-                    key={option.label}
-                    type="button"
-                    onClick={() => {
-                      setTipAmount(option.amount);
-                      setCustomTip("");
-                    }}
-                    className={`rounded-full border-2 px-4 py-2 font-hand text-lg transition ${
-                      tipAmount === option.amount && customTip === ""
-                        ? "border-lav-700 bg-lav-600 text-white"
-                        : "border-dashed border-lav-400 text-lav-700 hover:bg-lav-300"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-                <input
-                  inputMode="decimal"
-                  value={customTip}
-                  onChange={(e) => {
-                    setCustomTip(e.target.value);
-                    setTipAmount(Math.max(0, Math.round(Number(e.target.value || 0) * 100)));
-                  }}
-                  placeholder="Custom"
-                  className="w-28 rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
-                />
-              </div>
-            </section>
-          )}
-
-          <section className="sticker rounded-3xl bg-lav-100 p-6">
-            <div id="square-card-container" className="rounded-2xl bg-white p-3" />
+        {!checkout && (
+          <form
+            onSubmit={start}
+            className="sticker grid gap-4 rounded-3xl bg-lav-100 p-6"
+          >
+            <h2 className="font-marker text-xl text-lav-800">Contact details</h2>
+            {!contact && (
+              <>
+                <label className="grid gap-1 font-hand text-xl text-lav-700">
+                  Name
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    placeholder="Your name"
+                    className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
+                  />
+                </label>
+                <label className="grid gap-1 font-hand text-xl text-lav-700">
+                  Email
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="name@example.com"
+                    className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
+                  />
+                </label>
+              </>
+            )}
             <button
-              type="button"
-              onClick={pay}
-              disabled={busy || !cardReady}
-              className="sticker mt-4 w-full rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
+              type="submit"
+              disabled={busy}
+              className="sticker rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
             >
-              {busy ? "Paying..." : `Pay ${money(totalWithTip, checkout.total.currency)}`}
+              {busy
+                ? "Starting..."
+                : contact
+                ? "Continue to payment"
+                : "Continue to payment"}
             </button>
-          </section>
-        </div>
-      )}
+          </form>
+        )}
 
-      {message && (
-        <p className="mt-4 font-hand text-xl text-lav-800" role="alert">
-          {message}
-        </p>
-      )}
+        {checkout && (
+          <>
+            <Script
+              src={sdkURL(checkout.square.environment)}
+              onLoad={() => setScriptReady(true)}
+            />
+
+            {checkout.allowTipping && (
+              <section className="sticker rounded-3xl bg-lav-100 p-6">
+                <h2 className="font-marker text-xl text-lav-800">Add a tip</h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {tipOptions.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => {
+                        setTipAmount(option.amount);
+                        setCustomTip("");
+                      }}
+                      className={`rounded-full border-2 px-4 py-2 font-hand text-lg transition ${
+                        tipAmount === option.amount && customTip === ""
+                          ? "border-lav-700 bg-lav-600 text-white"
+                          : "border-dashed border-lav-400 text-lav-700 hover:bg-lav-300"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                  <input
+                    inputMode="decimal"
+                    value={customTip}
+                    onChange={(e) => {
+                      setCustomTip(e.target.value);
+                      setTipAmount(
+                        Math.max(
+                          0,
+                          Math.round(Number(e.target.value || 0) * 100),
+                        ),
+                      );
+                    }}
+                    placeholder="Custom"
+                    className="w-28 rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
+                  />
+                </div>
+              </section>
+            )}
+
+            <section className="sticker rounded-3xl bg-lav-100 p-6">
+              <h2 className="mb-3 font-marker text-xl text-lav-800">
+                Payment details
+              </h2>
+              <div
+                id="square-card-container"
+                className="rounded-2xl bg-white p-3"
+              />
+              <button
+                type="button"
+                onClick={pay}
+                disabled={busy || !cardReady}
+                className="sticker mt-4 w-full rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
+              >
+                {busy
+                  ? "Paying..."
+                  : `Pay ${money(totalWithTip, checkout.total.currency)}`}
+              </button>
+            </section>
+          </>
+        )}
+      </div>
     </div>
   );
 }
