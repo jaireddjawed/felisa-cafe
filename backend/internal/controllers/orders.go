@@ -24,29 +24,28 @@ func Checkout(e *core.RequestEvent) error {
 		return e.BadRequestError("invalid checkout payload", err)
 	}
 
-	collection, err := e.App.FindCollectionByNameOrId("orders")
-	if err != nil {
-		return e.InternalServerError("orders collection not configured", err)
-	}
-
 	items := make([]models.OrderItem, 0, len(input.Items))
 	var subtotal float64
 
 	for _, in := range input.Items {
-		product, err := e.App.FindFirstRecordByFilter("products", "slug = {:slug}", dbx.Params{"slug": in.Slug})
+		record, err := e.App.FindFirstRecordByFilter("products", "slug = {:slug}", dbx.Params{"slug": in.Slug})
 		if err != nil {
 			return e.BadRequestError("unknown product: "+in.Slug, err)
 		}
 
-		unitPrice := product.GetFloat("price")
+		product, err := models.ProductFromRecord(record)
+		if err != nil {
+			return e.InternalServerError("failed to read product", err)
+		}
+
 		items = append(items, models.OrderItem{
 			Slug:      in.Slug,
-			Name:      product.GetString("name"),
-			UnitPrice: unitPrice,
+			Name:      product.Name,
+			UnitPrice: product.Price,
 			Qty:       in.Qty,
 			Options:   in.Options,
 		})
-		subtotal += unitPrice * float64(in.Qty)
+		subtotal += product.Price * float64(in.Qty)
 	}
 
 	order := &models.Order{
@@ -59,6 +58,10 @@ func Checkout(e *core.RequestEvent) error {
 		Subtotal:      subtotal,
 	}
 
+	collection, err := e.App.FindCollectionByNameOrId("orders")
+	if err != nil {
+		return e.InternalServerError("orders collection not configured", err)
+	}
 	record := core.NewRecord(collection)
 	order.ApplyToRecord(record)
 
