@@ -29,6 +29,12 @@ type Product struct {
 	PourTop     string          `column:"pour_top"`
 	PourBottom  string          `column:"pour_bottom"`
 	Badge       string          `column:"badge"`
+
+	// CatalogID is the linked payment processor catalog item's ID (see
+	// internal/providers/payments.PaymentProcessor). The processor is the
+	// source of truth for catalog data; this is empty until a sync runs,
+	// and PocketBase only ever caches what the processor returns.
+	CatalogID string `column:"catalog_id"`
 }
 
 func (p *Product) ApplyToRecord(record *core.Record) {
