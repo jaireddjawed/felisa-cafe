@@ -1,4 +1,4 @@
-package router
+package routes
 
 import (
 	"github.com/pocketbase/pocketbase/core"
