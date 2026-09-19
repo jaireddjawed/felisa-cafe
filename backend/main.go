@@ -8,8 +8,7 @@ import (
 
 	"felisa-cafe/backend/internal/actions"
 	_ "felisa-cafe/backend/internal/migrations"
-	"felisa-cafe/backend/internal/providers/payments"
-	"felisa-cafe/backend/internal/router"
+	"felisa-cafe/backend/internal/routes"
 )
 
 func main() {

@@ -8,6 +8,7 @@ type ProductCategory string
 
 const (
 	ProductCategorySignature ProductCategory = "signature"
+	ProductCategoryMatcha    ProductCategory = "matcha"
 	ProductCategoryPantry    ProductCategory = "pantry"
 	ProductCategoryMerch     ProductCategory = "merch"
 )
