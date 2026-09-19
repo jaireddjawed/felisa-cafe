@@ -18,6 +18,25 @@ cd frontend && npm install && npm run dev
 
 Frontend: http://localhost:3000 · PocketBase dashboard: http://localhost:8090/_/
 
+## Docker
+
+Start the full storefront and PocketBase stack with:
+
+```bash
+docker compose up --build
+```
+
+The PocketBase data directory persists in Docker's `pocketbase-data` volume.
+For Square-enabled checkout, add the credentials to `backend/.env`; Compose
+loads that file when it exists. The storefront is at http://localhost:3000 and
+the PocketBase dashboard is at http://localhost:8090/_/.
+
+To use a different storefront port, set `FRONTEND_PORT`, for example:
+
+```bash
+FRONTEND_PORT=3001 docker compose up --build
+```
+
 ## Type generation
 
 Backend: `go generate ./...` (from `backend/`) regenerates the typed PocketBase layer from the migrations. Run it after every migration change; see `backend/README.md`.

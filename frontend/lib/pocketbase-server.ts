@@ -5,7 +5,10 @@ import PocketBase, { getTokenPayload } from "pocketbase";
 
 import type { TypedPocketBase } from "./pocketbase-types";
 
-const PB_URL = process.env.NEXT_PUBLIC_PB_URL ?? "http://127.0.0.1:8090";
+// In Docker, server-side requests use the private service name while browser
+// requests keep using the public URL embedded in the client bundle.
+const PB_URL =
+  process.env.PB_URL ?? process.env.NEXT_PUBLIC_PB_URL ?? "http://127.0.0.1:8090";
 
 export const AUTH_COOKIE = "pb_auth";
 

@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      PUBLIC_SITE_URL: http://localhost:${FRONTEND_PORT:-3000}
+    ports:
+      - "8090:8090"
+    volumes:
+      - pocketbase-data:/app/pb_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8090/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # This URL is compiled into browser JavaScript.
+        NEXT_PUBLIC_PB_URL: http://localhost:8090
+    environment:
+      # Server Actions run inside this container, where `backend` is resolvable.
+      PB_URL: http://backend:8090
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  pocketbase-data:
