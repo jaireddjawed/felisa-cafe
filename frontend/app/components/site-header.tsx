@@ -55,6 +55,8 @@ export function SiteHeader({ accountSlot }: { accountSlot?: ReactNode }) {
             );
           })}
 
+          {accountSlot}
+
           <button
             type="button"
             onClick={open}
@@ -68,8 +70,6 @@ export function SiteHeader({ accountSlot }: { accountSlot?: ReactNode }) {
               </span>
             )}
           </button>
-
-          {accountSlot}
         </nav>
       </div>
     </header>

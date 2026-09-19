@@ -37,8 +37,6 @@ export function SiteFooter() {
         <div>
           <h2 className="font-marker text-lg text-white">Hours</h2>
           <p className="mt-3 font-hand text-xl text-lav-200">
-            {SHOP.openingDate}
-            <br />
             {SHOP.openingHours}
           </p>
           <nav className="mt-5 flex flex-col gap-1 font-hand text-xl">
