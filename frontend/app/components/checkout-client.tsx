@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { orderApi } from "@/lib/pocketbase";
 import { useCart } from "@/lib/cart";
 import type { CheckoutView } from "@/lib/api-types";
@@ -39,7 +39,7 @@ function money(amount: number, currency = "USD") {
   }).format(amount / 100);
 }
 
-function sdkURL(environment: string) {
+function sdkURL(environment = "sandbox") {
   return environment === "production"
     ? "https://web.squarecdn.com/v1/square.js"
     : "https://sandbox.web.squarecdn.com/v1/square.js";
@@ -60,49 +60,57 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
   const cardRef = useRef<SquareCard | null>(null);
 
   const tipOptions = useMemo(() => {
-    const base = checkout?.total.amount ?? 0;
+    const base = checkout?.total.amount ?? subtotal.amount ?? 0;
     return [
       { label: "No tip", amount: 0 },
       { label: "15%", amount: Math.round(base * 0.15) },
       { label: "20%", amount: Math.round(base * 0.2) },
     ];
-  }, [checkout]);
+  }, [checkout, subtotal]);
 
-  const totalWithTip = (checkout?.total.amount ?? 0) + tipAmount;
+  const totalWithTip =
+    (checkout?.total.amount ?? subtotal.amount ?? 0) + tipAmount;
 
-  async function startCheckout() {
+  async function startCheckout(): Promise<CheckoutView | null> {
+    if (!name.trim() || !email.trim()) return null;
     setBusy(true);
     setMessage(null);
     try {
-      const cartToken = window.localStorage.getItem(CART_TOKEN_KEY) ?? undefined;
+      const cartToken =
+        window.localStorage.getItem(CART_TOKEN_KEY) ?? undefined;
       const result = await orderApi.checkout(
         { cartToken },
-        { customerName: name, customerEmail: email },
+        { customerName: name.trim(), customerEmail: email.trim() },
         window.crypto.randomUUID(),
       );
       if (result.orderToken) {
         window.localStorage.setItem(ORDER_TOKEN_KEY, result.orderToken);
       }
       setCheckout(result);
+      return result;
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not start checkout.");
+      setMessage(
+        err instanceof Error ? err.message : "Could not start checkout.",
+      );
+      return null;
     } finally {
       setBusy(false);
     }
   }
 
-  async function start(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    await startCheckout();
-  }
-
+  // Auto-start checkout when contact details are present (logged in or guest entered)
   useEffect(() => {
-    if (!contact || checkout || busy) return;
-    const id = window.setTimeout(() => void startCheckout(), 0);
-    return () => window.clearTimeout(id);
+    if (checkout || busy) return;
+    if (name.trim() && email.trim() && email.includes("@")) {
+      const id = window.setTimeout(() => {
+        void startCheckout();
+      }, 400);
+      return () => window.clearTimeout(id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contact]);
+  }, [contact, name, email]);
 
+  // Attach Square Card form when checkout and script are ready
   useEffect(() => {
     if (!scriptReady || !checkout || cardRef.current) return;
     if (!checkout.square.applicationId || !checkout.square.locationId) {
@@ -127,7 +135,9 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
         cardRef.current = card;
         setCardReady(true);
       } catch (err) {
-        setMessage(err instanceof Error ? err.message : "Could not load card form.");
+        setMessage(
+          err instanceof Error ? err.message : "Could not load card form.",
+        );
       }
     }
     void attachCard();
@@ -136,24 +146,46 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
     };
   }, [checkout, scriptReady]);
 
-  async function pay() {
-    if (!checkout || !cardRef.current) return;
+  async function handlePay() {
+    if (!name.trim() || !email.trim()) {
+      setMessage("Please fill in your name and email above.");
+      return;
+    }
+
     setBusy(true);
     setMessage(null);
     try {
+      let activeCheckout = checkout;
+      if (!activeCheckout) {
+        activeCheckout = await startCheckout();
+        if (!activeCheckout) {
+          throw new Error("Could not initialize order. Please try again.");
+        }
+      }
+
+      if (!cardRef.current) {
+        throw new Error("Card form is loading. Please wait a moment.");
+      }
+
       const token = await cardRef.current.tokenize();
       if (token.status !== "OK" || !token.token) {
-        throw new Error(token.errors?.[0]?.message ?? "Card could not be tokenized.");
+        throw new Error(
+          token.errors?.[0]?.message ?? "Card could not be tokenized.",
+        );
       }
-      const orderToken = window.localStorage.getItem(ORDER_TOKEN_KEY) ?? undefined;
+
+      const orderToken =
+        window.localStorage.getItem(ORDER_TOKEN_KEY) ?? undefined;
       const order = await orderApi.pay(
         { orderToken },
-        { orderId: checkout.orderId, sourceId: token.token, tipAmount },
+        { orderId: activeCheckout.orderId, sourceId: token.token, tipAmount },
         window.crypto.randomUUID(),
       );
       router.push(`/orders/${order.id}`);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not complete payment.");
+      setMessage(
+        err instanceof Error ? err.message : "Could not complete payment.",
+      );
     } finally {
       setBusy(false);
     }
@@ -188,6 +220,11 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-12">
+      <Script
+        src={sdkURL(checkout?.square.environment)}
+        onLoad={() => setScriptReady(true)}
+      />
+
       <Link
         href="/menu"
         className="font-hand text-xl text-lav-600 underline decoration-dashed hover:text-lav-800"
@@ -201,15 +238,15 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
 
       {message && (
         <p
-          className="sticker mb-5 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 font-hand text-lg text-rose-800"
+          className="sticker mb-6 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 font-hand text-lg text-rose-800"
           role="alert"
         >
           {message}
         </p>
       )}
 
-      <div className="grid gap-5">
-        {/* Full Order Review Card */}
+      <div className="grid gap-6">
+        {/* 1. Full Order Breakdown Section */}
         <section className="sticker rounded-3xl bg-lav-100 p-6">
           <div className="flex items-center gap-2 border-b-2 border-dashed border-lav-300 pb-3">
             <CatFace size={24} className="text-lav-600" />
@@ -259,138 +296,142 @@ export function CheckoutClient({ contact }: { contact?: Contact }) {
                 {checkout ? checkout.tax.formatted : "$0.00"}
               </span>
             </div>
-            {tipAmount > 0 && checkout && (
+            {tipAmount > 0 && (
               <div className="mt-1 flex font-hand text-xl text-lav-700">
                 <span>Tip</span>
                 <span className="ml-auto">
-                  {money(tipAmount, checkout.total.currency)}
+                  {money(
+                    tipAmount,
+                    checkout?.total.currency ?? subtotal.currency ?? "USD",
+                  )}
                 </span>
               </div>
             )}
             <div className="mt-3 flex items-baseline border-t-2 border-dashed border-lav-300 pt-3">
               <span className="font-hand text-2xl text-lav-700">Total</span>
               <span className="ml-auto font-marker text-3xl text-lav-800">
-                {checkout
-                  ? money(totalWithTip, checkout.total.currency)
-                  : subtotal.formatted}
+                {money(
+                  totalWithTip,
+                  checkout?.total.currency ?? subtotal.currency ?? "USD",
+                )}
               </span>
             </div>
           </div>
         </section>
 
-        {!checkout && (
-          <form
-            onSubmit={start}
-            className="sticker grid gap-4 rounded-3xl bg-lav-100 p-6"
-          >
-            <h2 className="font-marker text-xl text-lav-800">Contact details</h2>
-            {!contact && (
-              <>
-                <label className="grid gap-1 font-hand text-xl text-lav-700">
-                  Name
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    placeholder="Your name"
-                    className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
-                  />
-                </label>
-                <label className="grid gap-1 font-hand text-xl text-lav-700">
-                  Email
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="name@example.com"
-                    className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
-                  />
-                </label>
-              </>
+        {/* 2. Contact Details Section */}
+        <section className="sticker rounded-3xl bg-lav-100 p-6">
+          <div className="flex items-center justify-between border-b-2 border-dashed border-lav-300 pb-3">
+            <h2 className="font-marker text-2xl text-lav-800">Contact details</h2>
+            {contact && (
+              <span className="rounded-full bg-lav-200 px-3 py-1 font-hand text-sm text-lav-700">
+                Signed in
+              </span>
             )}
-            <button
-              type="submit"
-              disabled={busy}
-              className="sticker rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
-            >
-              {busy
-                ? "Starting..."
-                : contact
-                ? "Continue to payment"
-                : "Continue to payment"}
-            </button>
-          </form>
-        )}
+          </div>
 
-        {checkout && (
-          <>
-            <Script
-              src={sdkURL(checkout.square.environment)}
-              onLoad={() => setScriptReady(true)}
-            />
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1 font-hand text-xl text-lav-700">
+              Name
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                placeholder="Your name"
+                className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
+              />
+            </label>
+            <label className="grid gap-1 font-hand text-xl text-lav-700">
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="name@example.com"
+                className="rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
+              />
+            </label>
+          </div>
+        </section>
 
-            {checkout.allowTipping && (
-              <section className="sticker rounded-3xl bg-lav-100 p-6">
-                <h2 className="font-marker text-xl text-lav-800">Add a tip</h2>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {tipOptions.map((option) => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      onClick={() => {
-                        setTipAmount(option.amount);
-                        setCustomTip("");
-                      }}
-                      className={`rounded-full border-2 px-4 py-2 font-hand text-lg transition ${
-                        tipAmount === option.amount && customTip === ""
-                          ? "border-lav-700 bg-lav-600 text-white"
-                          : "border-dashed border-lav-400 text-lav-700 hover:bg-lav-300"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                  <input
-                    inputMode="decimal"
-                    value={customTip}
-                    onChange={(e) => {
-                      setCustomTip(e.target.value);
-                      setTipAmount(
-                        Math.max(
-                          0,
-                          Math.round(Number(e.target.value || 0) * 100),
-                        ),
-                      );
+        {/* 3. Payment Details Section (Always its own separate section) */}
+        <section className="sticker rounded-3xl bg-lav-100 p-6">
+          <div className="flex items-center gap-2 border-b-2 border-dashed border-lav-300 pb-3">
+            <h2 className="font-marker text-2xl text-lav-800">Payment details</h2>
+          </div>
+
+          <div className="mt-4 grid gap-5">
+            {/* Tip Selection */}
+            <div>
+              <h3 className="font-marker text-xl text-lav-800">Add a tip</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {tipOptions.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => {
+                      setTipAmount(option.amount);
+                      setCustomTip("");
                     }}
-                    placeholder="Custom"
-                    className="w-28 rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
-                  />
-                </div>
-              </section>
-            )}
+                    className={`rounded-full border-2 px-4 py-2 font-hand text-lg transition ${
+                      tipAmount === option.amount && customTip === ""
+                        ? "border-lav-700 bg-lav-600 text-white"
+                        : "border-dashed border-lav-400 text-lav-700 hover:bg-lav-300"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                <input
+                  inputMode="decimal"
+                  value={customTip}
+                  onChange={(e) => {
+                    setCustomTip(e.target.value);
+                    setTipAmount(
+                      Math.max(
+                        0,
+                        Math.round(Number(e.target.value || 0) * 100),
+                      ),
+                    );
+                  }}
+                  placeholder="Custom"
+                  className="w-28 rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600"
+                />
+              </div>
+            </div>
 
-            <section className="sticker rounded-3xl bg-lav-100 p-6">
-              <h2 className="mb-3 font-marker text-xl text-lav-800">
-                Payment details
-              </h2>
+            {/* Card Information */}
+            <div>
+              <h3 className="mb-2 font-marker text-xl text-lav-800">Card information</h3>
               <div
                 id="square-card-container"
-                className="rounded-2xl bg-white p-3"
-              />
-              <button
-                type="button"
-                onClick={pay}
-                disabled={busy || !cardReady}
-                className="sticker mt-4 w-full rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
+                className="min-h-[90px] rounded-2xl bg-white p-3 border-2 border-lav-200"
               >
-                {busy
-                  ? "Paying..."
-                  : `Pay ${money(totalWithTip, checkout.total.currency)}`}
-              </button>
-            </section>
-          </>
-        )}
+                {!checkout && (
+                  <p className="py-6 text-center font-hand text-lg text-lav-500">
+                    Enter your name and email above to load secure card input.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Pay Button */}
+            <button
+              type="button"
+              onClick={handlePay}
+              disabled={busy || (checkout ? !cardReady : !name.trim() || !email.trim())}
+              className="sticker mt-2 w-full rounded-full bg-lav-600 py-3 font-marker text-lg text-white transition hover:bg-lav-700 disabled:opacity-40"
+            >
+              {busy
+                ? "Processing..."
+                : `Pay ${money(
+                    totalWithTip,
+                    checkout?.total.currency ?? subtotal.currency ?? "USD",
+                  )}`}
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );
