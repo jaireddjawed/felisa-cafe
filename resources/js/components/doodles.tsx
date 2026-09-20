@@ -1,209 +1,176 @@
 import type { CSSProperties } from 'react';
 
 /**
- * The hand-drawn marks the whole storefront is built from. They are SVG
- * rather than images so they inherit `currentColor` and stay crisp, and so
- * the menu works before anyone runs a photo shoot.
+ * Hand-drawn marks used across the site. All stroke-based so they inherit
+ * `currentColor` and can sit on any lavender.
  */
 
 type DoodleProps = {
-    size?: number;
     className?: string;
+    size?: number;
 };
 
-export function CatFace({ size = 32, className }: DoodleProps) {
-    return (
-        <svg
-            width={size}
-            height={size}
-            viewBox="0 0 64 64"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={className}
-            aria-hidden="true"
-        >
-            <path d="M14 26c0-9 8-15 18-15s18 6 18 15c0 12-8 20-18 20s-18-8-18-20Z" />
-            <path d="M16 24 12 10l11 6M48 24l4-14-11 6" />
-            <path d="M25 28h.02M39 28h.02" strokeWidth={5} />
-            <path d="M32 34a3 3 0 0 1-3-3M32 34a3 3 0 0 0 3-3" />
-            <path
-                d="M8 30h10M8 36h10M46 30h10M46 36h10"
-                strokeWidth={2}
-                opacity={0.7}
-            />
-        </svg>
-    );
-}
-
-export function GirlDoodle({ size = 48, className }: DoodleProps) {
-    return (
-        <svg
-            width={size}
-            height={size}
-            viewBox="0 0 64 64"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={className}
-            aria-hidden="true"
-        >
-            <circle cx="32" cy="24" r="13" />
-            <path d="M19 22c2-10 10-14 18-11 5 2 8 6 8 11" />
-            <path d="M27 24h.02M37 24h.02" strokeWidth={5} />
-            <path d="M28 31c2 2 6 2 8 0" />
-            <path d="M18 56c1-9 6-14 14-14s13 5 14 14" />
-        </svg>
-    );
-}
-
 export function Sparkle({
-    size = 20,
-    className,
+    className = '',
+    size = 24,
     style,
 }: DoodleProps & { style?: CSSProperties }) {
     return (
         <svg
+            viewBox="0 0 24 24"
             width={size}
             height={size}
-            viewBox="0 0 24 24"
-            fill="currentColor"
+            aria-hidden
             className={className}
             style={style}
-            aria-hidden="true"
         >
-            <path d="M12 0c.7 6.3 5 10.6 12 12-7 1.4-11.3 5.7-12 12-.7-6.3-5-10.6-12-12C7 10.6 11.3 6.3 12 0Z" />
+            <path
+                d="M12 0c.8 6.4 4.8 10.4 12 12-7.2 1.6-11.2 5.6-12 12-.8-6.4-4.8-10.4-12-12C7.2 10.4 11.2 6.4 12 0Z"
+                fill="currentColor"
+            />
         </svg>
     );
 }
 
-export function SquiggleRule({ className }: { className?: string }) {
+export function CatFace({ className = '', size = 64 }: DoodleProps) {
     return (
         <svg
-            viewBox="0 0 600 20"
-            preserveAspectRatio="none"
+            viewBox="0 0 100 86"
+            width={size}
+            height={size}
+            aria-hidden
+            className={className}
             fill="none"
             stroke="currentColor"
-            strokeWidth={3}
+            strokeWidth={4}
             strokeLinecap="round"
-            className={className}
-            aria-hidden="true"
+            strokeLinejoin="round"
         >
-            <path d="M0 10c25-12 50 12 75 0s50-12 75 0 50 12 75 0 50-12 75 0 50 12 75 0 50-12 75 0 50 12 75 0 50-12 75 0" />
+            <path d="M22 30 18 6l20 14M78 30 82 6 62 20" />
+            <path d="M20 34c0-12 13-20 30-20s30 8 30 20c0 22-12 38-30 38S20 56 20 34Z" />
+            <path d="M38 38h.5M62 38h.5" strokeWidth={9} />
+            <path d="M50 48v4M50 52c-3 5-9 3-9-1M50 52c3 5 9 3 9-1" />
+            <path d="M4 34h22M2 44l24-4M6 54l20-8M96 34H74M98 44 74 40M94 54 74 46" />
         </svg>
     );
 }
 
-type DrinkGlassProps = DoodleProps & {
-    /** Gradient stops, top layer to bottom layer, in the drink's real colors. */
-    top: string;
-    bottom: string;
-    ice?: boolean;
-    style?: CSSProperties;
-};
+/** The curly-haired girl from the logo, drawn in one weight of marker. */
+export function GirlDoodle({ className = '', size = 72 }: DoodleProps) {
+    return (
+        <svg
+            viewBox="0 0 100 110"
+            width={size}
+            height={size * 1.1}
+            aria-hidden
+            className={className}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M26 24c-8-6-14 2-10 8-8 0-10 10-2 13-6 5-2 14 6 13M74 24c8-6 14 2 10 8 8 0 10 10 2 13 6 5 2 14-6 13" />
+            <rect x="26" y="18" width="48" height="72" rx="10" />
+            <circle cx="40" cy="44" r="9" />
+            <circle cx="62" cy="44" r="9" />
+            <path d="M49 44h4" />
+            <path d="M40 41.5h.5M62 41.5h.5" strokeWidth={9} />
+            <path d="M51 52v8M38 70c5 8 19 8 24 0" />
+        </svg>
+    );
+}
 
-/**
- * An illustrated glass in a drink's own colors. Each drink gets its pour
- * colors from the database, so the menu is visual without photography.
- */
+/** A wobbly hand-drawn rule, the kind you get from a marker and no ruler. */
+export function SquiggleRule({ className = '' }: { className?: string }) {
+    return (
+        <svg
+            viewBox="0 0 1200 24"
+            preserveAspectRatio="none"
+            aria-hidden
+            className={className}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={5}
+            strokeLinecap="round"
+        >
+            <path d="M4 14c50-12 100 10 150 0s100-16 150-4 100 14 150 4 100-16 150-4 100 14 150 4 100-16 150-4 96 12 142 2" />
+        </svg>
+    );
+}
+
+/** An illustrated iced drink: two poured layers behind a glass highlight. */
 export function DrinkGlass({
     top,
     bottom,
-    ice = false,
-    className,
+    className = '',
+    ice = true,
     style,
-}: DrinkGlassProps) {
-    // Unique per instance so several glasses can render different gradients.
-    const gradientId = `pour-${top.replace('#', '')}-${bottom.replace('#', '')}`;
+}: {
+    /** Gradient stops, top layer to bottom layer, in the drink's real colors. */
+    top: string;
+    bottom: string;
+    className?: string;
+    ice?: boolean;
+    style?: CSSProperties;
+}) {
+    const clipId = `glass-${top.slice(1)}${bottom.slice(1)}`;
 
     return (
         <svg
-            viewBox="0 0 80 130"
-            fill="none"
+            viewBox="0 0 120 170"
+            aria-hidden
             className={className}
             style={style}
-            aria-hidden="true"
         >
             <defs>
-                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={top} />
-                    <stop offset="100%" stopColor={bottom} />
-                </linearGradient>
+                <clipPath id={clipId}>
+                    <path d="M22 20h76l-8 132a14 14 0 0 1-14 12H44a14 14 0 0 1-14-12Z" />
+                </clipPath>
             </defs>
-
-            {/* Cup */}
+            <g clipPath={`url(#${clipId})`}>
+                <rect x="18" y="16" width="84" height="88" fill={top} />
+                <rect x="18" y="96" width="84" height="76" fill={bottom} />
+                {/* The blur between poured layers, where the syrup starts to lift. */}
+                <rect
+                    x="18"
+                    y="86"
+                    width="84"
+                    height="24"
+                    fill={top}
+                    opacity="0.45"
+                    style={{ filter: 'blur(7px)' }}
+                />
+                {ice && (
+                    <g fill="#fff" opacity="0.4">
+                        <rect x="32" y="26" width="24" height="22" rx="4" />
+                        <rect x="62" y="34" width="22" height="20" rx="4" />
+                        <rect x="44" y="52" width="26" height="20" rx="4" />
+                    </g>
+                )}
+                <rect
+                    x="24"
+                    y="16"
+                    width="10"
+                    height="156"
+                    fill="#fff"
+                    opacity="0.35"
+                />
+            </g>
             <path
-                d="M16 26h48l-5 88a8 8 0 0 1-8 7H29a8 8 0 0 1-8-7L16 26Z"
-                fill={`url(#${gradientId})`}
-                stroke="#4B2A7B"
-                strokeWidth={3}
-                strokeLinejoin="round"
-            />
-            {/* Lid */}
-            <rect
-                x="10"
-                y="16"
-                width="60"
-                height="12"
-                rx="5"
-                fill="#fff"
-                stroke="#4B2A7B"
-                strokeWidth={3}
-            />
-            {/* Straw */}
-            <path
-                d="M46 16 54 2"
-                stroke="#4B2A7B"
-                strokeWidth={5}
-                strokeLinecap="round"
-            />
-
-            {ice && (
-                <g
-                    stroke="#fff"
-                    strokeWidth={2.5}
-                    opacity={0.55}
-                    strokeLinejoin="round"
-                    fill="none"
-                >
-                    <rect
-                        x="27"
-                        y="44"
-                        width="14"
-                        height="14"
-                        rx="3"
-                        transform="rotate(-12 34 51)"
-                    />
-                    <rect
-                        x="43"
-                        y="62"
-                        width="13"
-                        height="13"
-                        rx="3"
-                        transform="rotate(16 49 68)"
-                    />
-                    <rect
-                        x="25"
-                        y="76"
-                        width="12"
-                        height="12"
-                        rx="3"
-                        transform="rotate(8 31 82)"
-                    />
-                </g>
-            )}
-
-            {/* Highlight, so the glass reads as glass */}
-            <path
-                d="M25 40c2 24 3 48 4 66"
+                d="M22 20h76l-8 132a14 14 0 0 1-14 12H44a14 14 0 0 1-14-12Z"
+                fill="none"
                 stroke="#fff"
-                strokeWidth={4}
-                strokeLinecap="round"
-                opacity={0.35}
+                strokeWidth="5"
+            />
+            <ellipse
+                cx="60"
+                cy="20"
+                rx="38"
+                ry="8"
+                fill="none"
+                stroke="#fff"
+                strokeWidth="5"
             />
         </svg>
     );
