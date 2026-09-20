@@ -1,0 +1,55 @@
+services:
+  # Web Service running the Laravel + React App with FrankenPHP
+  - type: web
+    name: felisa-cafe
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: starter # or 'free' if available for web services
+    region: oregon # or ohio, frankfurt, singapore
+    healthCheckPath: /
+    envVars:
+      - key: APP_NAME
+        value: "Felisa Cafe"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_URL
+        sync: false # Set to your Render custom domain / onrender.com URL
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: felisa-cafe-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: felisa-cafe-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: felisa-cafe-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: felisa-cafe-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: felisa-cafe-db
+          property: password
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+
+databases:
+  - name: felisa-cafe-db
+    plan: free # Render free PostgreSQL instance (dev tier)
+    region: oregon
+    databaseName: felisa_cafe
+    user: postgres
