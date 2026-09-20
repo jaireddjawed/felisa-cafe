@@ -116,6 +116,25 @@ class SquareClient
         return new LivePrices($variations, $modifiers);
     }
 
+    /**
+     * Creates or updates a batch of catalog objects.
+     *
+     * @param  list<array<string, mixed>>  $objects
+     */
+    public function batchUpsertCatalogObjects(string $idempotencyKey, array $objects): void
+    {
+        if ($objects === []) {
+            return;
+        }
+
+        $this->post('/v2/catalog/batch-upsert', [
+            'idempotency_key' => $idempotencyKey,
+            'batches' => [
+                ['objects' => $objects],
+            ],
+        ]);
+    }
+
     // -----------------------------------------------------------------------
     // Orders and payments
     // -----------------------------------------------------------------------

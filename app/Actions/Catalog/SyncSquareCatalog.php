@@ -6,7 +6,6 @@ namespace App\Actions\Catalog;
 
 use App\Enums\CatalogStatus;
 use App\Enums\ProductCategory;
-use App\Models\Modifier;
 use App\Models\ModifierList;
 use App\Models\Product;
 use App\Square\Data\CatalogItem;
