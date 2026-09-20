@@ -1,1 +1,0 @@
-@frontend/AGENTS.md
