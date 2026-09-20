@@ -103,6 +103,23 @@ body {
     animation: bob 6s ease-in-out infinite;
 }
 
+@utility apple-pay-button {
+    -webkit-appearance: -apple-pay-button;
+    -apple-pay-button-type: plain;
+    -apple-pay-button-style: black;
+}
+
+@utility wallet-pay-button {
+    width: 100%;
+}
+
+.wallet-pay-button > *,
+.wallet-pay-button iframe,
+.wallet-pay-button button {
+    width: 100% !important;
+    max-width: none !important;
+}
+
 @layer base {
     /* Form controls inherit the handwritten type rather than the browser's. */
     input,

@@ -18,8 +18,28 @@ export interface SquareCard {
     tokenize(): Promise<SquareTokenResult>;
 }
 
+export interface SquarePaymentRequest {}
+
+export interface SquarePaymentRequestOptions {
+    countryCode: string;
+    currencyCode: string;
+    total: {
+        amount: string;
+        label: string;
+    };
+}
+
+export interface SquareWallet {
+    attach?(selector: string): Promise<void>;
+    destroy?(): Promise<void>;
+    tokenize(): Promise<SquareTokenResult>;
+}
+
 export interface SquarePayments {
     card(): Promise<SquareCard>;
+    paymentRequest(options: SquarePaymentRequestOptions): SquarePaymentRequest;
+    applePay(paymentRequest: SquarePaymentRequest): Promise<SquareWallet>;
+    googlePay(paymentRequest: SquarePaymentRequest): Promise<SquareWallet>;
 }
 
 declare global {

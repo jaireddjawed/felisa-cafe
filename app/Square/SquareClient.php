@@ -8,6 +8,7 @@ use App\Square\Data\CatalogSnapshot;
 use App\Square\Data\CustomerContact;
 use App\Square\Data\LivePrices;
 use App\Square\Data\OrderLine;
+use App\Square\Data\OrderPricing;
 use App\Square\Data\OrderState;
 use App\Square\Data\PaymentResult;
 use Carbon\CarbonImmutable;
@@ -127,6 +128,25 @@ class SquareClient
      *
      * @param  list<OrderLine>  $lines
      */
+    public function calculateOrder(string $idempotencyKey, array $lines): OrderPricing
+    {
+        $body = $this->post('/v2/orders/calculate', [
+            'idempotency_key' => $idempotencyKey,
+            'order' => $this->orderPayload(lines: $lines),
+        ]);
+
+        $order = Json::object($body, 'order');
+
+        return new OrderPricing(
+            totalCents: Json::int($order, 'total_money.amount'),
+            taxCents: Json::int($order, 'total_tax_money.amount'),
+            currency: Json::string($order, 'total_money.currency', $this->currency),
+        );
+    }
+
+    /**
+     * @param  list<OrderLine>  $lines
+     */
     public function createOrder(
         string $idempotencyKey,
         string $referenceId,
@@ -137,33 +157,52 @@ class SquareClient
     ): OrderState {
         $body = $this->post('/v2/orders', [
             'idempotency_key' => $idempotencyKey,
-            'order' => [
-                'location_id' => $this->locationId,
-                'reference_id' => $referenceId,
-                'line_items' => array_map($this->lineItem(...), $lines),
-                'fulfillments' => [[
-                    'type' => 'PICKUP',
-                    'state' => 'PROPOSED',
-                    'pickup_details' => array_filter([
-                        'recipient' => array_filter([
-                            'display_name' => $customer->name,
-                            'email_address' => $customer->email,
-                            'phone_number' => $customer->phone,
-                        ], fn (string $value): bool => $value !== ''),
-                        'schedule_type' => 'ASAP',
-                        'prep_time_duration' => 'PT'.max(1, $prepMinutes).'M',
-                        'note' => mb_substr($note, 0, 500),
-                    ], fn (array|string $value): bool => $value !== '' && $value !== []),
-                ]],
-                'metadata' => ['local_order_id' => $referenceId],
-                'pricing_options' => [
-                    'auto_apply_taxes' => true,
-                    'auto_apply_discounts' => true,
-                ],
-            ],
+            'order' => $this->orderPayload($lines, $referenceId, $customer, $note, $prepMinutes),
         ]);
 
         return $this->orderState(Json::object($body, 'order'));
+    }
+
+    /**
+     * @param  list<OrderLine>  $lines
+     * @return array<string, mixed>
+     */
+    private function orderPayload(
+        array $lines,
+        ?string $referenceId = null,
+        ?CustomerContact $customer = null,
+        string $note = '',
+        int $prepMinutes = 1,
+    ): array {
+        $payload = [
+            'location_id' => $this->locationId,
+            'line_items' => array_map($this->lineItem(...), $lines),
+            'pricing_options' => [
+                'auto_apply_taxes' => true,
+                'auto_apply_discounts' => true,
+            ],
+        ];
+
+        if ($referenceId !== null) {
+            $payload['reference_id'] = $referenceId;
+            $payload['fulfillments'] = [[
+                'type' => 'PICKUP',
+                'state' => 'PROPOSED',
+                'pickup_details' => array_filter([
+                    'recipient' => array_filter([
+                        'display_name' => $customer?->name ?? '',
+                        'email_address' => $customer?->email ?? '',
+                        'phone_number' => $customer?->phone ?? '',
+                    ], fn (string $value): bool => $value !== ''),
+                    'schedule_type' => 'ASAP',
+                    'prep_time_duration' => 'PT'.max(1, $prepMinutes).'M',
+                    'note' => mb_substr($note, 0, 500),
+                ], fn (array|string $value): bool => $value !== '' && $value !== []),
+            ]];
+            $payload['metadata'] = ['local_order_id' => $referenceId];
+        }
+
+        return $payload;
     }
 
     /**

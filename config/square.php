@@ -66,6 +66,8 @@ return [
 
     'currency' => env('SQUARE_CURRENCY', 'USD'),
 
+    'country_code' => env('SQUARE_COUNTRY_CODE', 'US'),
+
     'timeout' => (int) env('SQUARE_TIMEOUT', 15),
 
     'api_version' => '2025-01-23',

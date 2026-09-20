@@ -52,6 +52,7 @@ function fakeSuccessfulSquare(int $totalCents = 918, int $taxCents = 68): void
         '/v2/catalog/batch-retrieve' => Http::response(
             FakeSquare::livePrices(variationPrices: ['*' => 850], modifierPrices: ['MOD_OAT' => 0])
         ),
+        '/v2/orders/calculate' => Http::response(FakeSquare::order(totalCents: $totalCents, taxCents: $taxCents)),
         '/v2/orders' => Http::response(FakeSquare::order(totalCents: $totalCents, taxCents: $taxCents)),
         '/v2/payments' => Http::response(FakeSquare::payment()),
         '/v2/orders/*' => Http::response(FakeSquare::order(
@@ -73,6 +74,7 @@ function fakeSquareFor(Product $product, int $priceCents = 850, int $totalCents 
             variationPrices: [$variationId => $priceCents],
             modifierPrices: ['MOD_OAT' => 0],
         )),
+        '/v2/orders/calculate' => Http::response(FakeSquare::order(totalCents: $totalCents, taxCents: $taxCents)),
         '/v2/orders' => Http::response(FakeSquare::order(totalCents: $totalCents, taxCents: $taxCents)),
         '/v2/payments' => Http::response(FakeSquare::payment()),
         '/v2/orders/*' => Http::response(FakeSquare::order(
@@ -393,15 +395,18 @@ it('charges the order total the server calculated, not one from the browser', fu
         && $request->data()['amount_money']['amount'] === 918);
 });
 
-it('shows the checkout page with a pickup estimate', function (): void {
-    checkoutReadyCart();
+it('shows the checkout page with Square tax preview but no pickup estimate', function (): void {
+    $product = checkoutReadyCart();
+    fakeSquareFor($product);
 
     $this->get(route('checkout'))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('checkout/index')
             ->where('cart.subtotal.cents', 850)
+            ->where('pricingPreview.tax.cents', 68)
+            ->where('pricingPreview.total.cents', 918)
             ->where('square.configured', true)
-            ->has('estimatedReadyAt')
+            ->missing('estimatedReadyAt')
         );
 });

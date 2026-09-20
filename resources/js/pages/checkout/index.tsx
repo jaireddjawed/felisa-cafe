@@ -1,46 +1,65 @@
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
-import { CatFace, Sparkle, SquiggleRule } from '@/components/doodles';
-import { useSquareCard } from '@/hooks/use-square-card';
-import { menu } from '@/routes';
-import { store } from '@/routes/checkout';
-import type { Cart, SharedProps } from '@/types';
+import { Head, Link, useForm, usePage } from "@inertiajs/react";
+import { useMemo, useState } from "react";
+import { CatFace, Sparkle, SquiggleRule } from "@/components/doodles";
+import { useSquareCard } from "@/hooks/use-square-card";
+import { menu } from "@/routes";
+import { store } from "@/routes/checkout";
+import type { Cart, Money, SharedProps } from "@/types";
 
-const CARD_CONTAINER_ID = 'square-card';
+const CARD_CONTAINER_ID = "square-card";
+const GOOGLE_PAY_CONTAINER_ID = "square-google-pay";
 
 type Props = {
     cart: Cart;
-    estimatedReadyAt: string | null;
+    pricingPreview: {
+        tax: Money;
+        total: Money;
+    } | null;
     square: {
         applicationId: string | null;
         locationId: string;
         sdkUrl: string;
+        countryCode: string;
+        currencyCode: string;
         configured: boolean;
     };
     allowTipping: boolean;
 };
 
 function formatCents(cents: number, currency: string): string {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
         currency,
     }).format(cents / 100);
 }
 
-function formatTime(iso: string | null): string | null {
-    if (!iso) {
-        return null;
+function customTipCents(
+    value: string,
+    subtotalCents: number,
+    mode: "dollars" | "percent",
+): number {
+    const trimmed = value.trim();
+
+    if (trimmed === "") {
+        return 0;
     }
 
-    return new Intl.DateTimeFormat('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-    }).format(new Date(iso));
+    const numeric = Number(trimmed.replace(/[$,]/g, ""));
+
+    if (!Number.isFinite(numeric) || numeric < 0) {
+        return 0;
+    }
+
+    if (mode === "percent") {
+        return Math.round(subtotalCents * (numeric / 100));
+    }
+
+    return Math.round(numeric * 100);
 }
 
 export default function Checkout({
     cart,
-    estimatedReadyAt,
+    pricingPreview,
     square,
     allowTipping,
 }: Props) {
@@ -49,10 +68,10 @@ export default function Checkout({
     const { auth, errors } = usePage<SharedProps>().props;
 
     const form = useForm({
-        name: auth.user?.name ?? '',
-        email: auth.user?.email ?? '',
-        notes: '',
-        source_id: '',
+        name: auth.user?.name ?? "",
+        email: auth.user?.email ?? "",
+        notes: "",
+        source_id: "",
         tip_cents: 0,
         // Generated once per visit and reused on every retry, so a declined
         // card followed by a second attempt resumes one order rather than
@@ -61,35 +80,59 @@ export default function Checkout({
     });
 
     const [tipCents, setTipCents] = useState(0);
-    const [customTip, setCustomTip] = useState('');
+    const [tipChoice, setTipChoice] = useState("No tip");
+    const [customTip, setCustomTip] = useState("");
+    const [customTipMode, setCustomTipMode] = useState<"percent" | "dollars">(
+        "percent",
+    );
     const [cardError, setCardError] = useState<string | null>(null);
 
-    const card = useSquareCard({
-        applicationId: square.applicationId ?? '',
-        locationId: square.locationId,
-        sdkUrl: square.sdkUrl,
-        selector: `#${CARD_CONTAINER_ID}`,
-        enabled: square.configured && cart.valid && cart.lines.length > 0,
-    });
-
-    const currency = cart.subtotal.currency;
+    const currency = pricingPreview?.total.currency ?? cart.subtotal.currency;
 
     const tipOptions = useMemo(
         () => [
-            { label: 'No tip', cents: 0 },
-            { label: '15%', cents: Math.round(cart.subtotal.cents * 0.15) },
-            { label: '20%', cents: Math.round(cart.subtotal.cents * 0.2) },
+            { label: "No tip", cents: 0 },
+            { label: "15%", cents: Math.round(cart.subtotal.cents * 0.15) },
+            { label: "20%", cents: Math.round(cart.subtotal.cents * 0.2) },
         ],
         [cart.subtotal.cents],
     );
 
-    const readyTime = formatTime(estimatedReadyAt);
+    const orderTotalCents = pricingPreview?.total.cents ?? cart.subtotal.cents;
+    const paymentTotalCents = orderTotalCents + tipCents;
+    const paymentTotal = formatCents(paymentTotalCents, currency);
 
-    async function pay() {
+    const paymentRequest = useMemo(
+        () => ({
+            countryCode: square.countryCode,
+            currencyCode: square.currencyCode,
+            total: {
+                amount: (paymentTotalCents / 100).toFixed(2),
+                label: "Felisa Cafe",
+            },
+        }),
+        [paymentTotalCents, square.countryCode, square.currencyCode],
+    );
+
+    const paymentMethods = useSquareCard({
+        applicationId: square.applicationId ?? "",
+        locationId: square.locationId,
+        sdkUrl: square.sdkUrl,
+        cardSelector: `#${CARD_CONTAINER_ID}`,
+        googlePaySelector: `#${GOOGLE_PAY_CONTAINER_ID}`,
+        paymentRequest,
+        enabled: square.configured && cart.valid && cart.lines.length > 0,
+    });
+
+    async function pay(tokenize: () => Promise<string>) {
+        if (form.processing || !cart.valid) {
+            return;
+        }
+
         setCardError(null);
 
         try {
-            const token = await card.tokenize();
+            const token = await tokenize();
 
             form.transform((data) => ({
                 ...data,
@@ -101,7 +144,7 @@ export default function Checkout({
             setCardError(
                 caught instanceof Error
                     ? caught.message
-                    : 'That card could not be read.',
+                    : "That payment method could not be read.",
             );
         }
     }
@@ -131,7 +174,7 @@ export default function Checkout({
     }
 
     const fieldClasses =
-        'rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600';
+        "rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600";
 
     return (
         <div className="mx-auto max-w-3xl px-5 py-12">
@@ -199,7 +242,7 @@ export default function Checkout({
                                         ),
                                     ]
                                         .filter(Boolean)
-                                        .join(' · ')}
+                                        .join(" · ")}
                                 </p>
                             </li>
                         ))}
@@ -212,10 +255,6 @@ export default function Checkout({
                                 {cart.subtotal.formatted}
                             </span>
                         </div>
-                        <p className="font-hand text-lav-500 mt-1 text-base">
-                            Tax is calculated by Square when your order is
-                            placed.
-                        </p>
                         {tipCents > 0 && (
                             <div className="font-hand text-lav-700 mt-1 flex text-xl">
                                 <span>Tip</span>
@@ -224,23 +263,26 @@ export default function Checkout({
                                 </span>
                             </div>
                         )}
+                        {pricingPreview ? (
+                            <div className="font-hand text-lav-700 mt-1 flex text-xl">
+                                <span>Tax</span>
+                                <span className="ml-auto">
+                                    {pricingPreview.tax.formatted}
+                                </span>
+                            </div>
+                        ) : (
+                            <p className="font-hand text-lav-500 mt-1 text-base">
+                                Tax will be included in your final receipt.
+                            </p>
+                        )}
                         <div className="border-lav-300 mt-3 flex items-baseline border-t-2 border-dashed pt-3">
                             <span className="font-hand text-lav-700 text-2xl">
                                 Total
                             </span>
                             <span className="font-marker text-lav-800 ml-auto text-3xl">
-                                {formatCents(
-                                    cart.subtotal.cents + tipCents,
-                                    currency,
-                                )}
+                                {formatCents(paymentTotalCents, currency)}
                             </span>
                         </div>
-                        {readyTime && (
-                            <p className="font-hand text-lav-600 mt-3 text-lg">
-                                Ready for pickup around{' '}
-                                <strong>{readyTime}</strong>.
-                            </p>
-                        )}
                     </div>
                 </section>
 
@@ -263,7 +305,7 @@ export default function Checkout({
                             <input
                                 value={form.data.name}
                                 onChange={(event) =>
-                                    form.setData('name', event.target.value)
+                                    form.setData("name", event.target.value)
                                 }
                                 required
                                 autoComplete="name"
@@ -283,7 +325,7 @@ export default function Checkout({
                                 type="email"
                                 value={form.data.email}
                                 onChange={(event) =>
-                                    form.setData('email', event.target.value)
+                                    form.setData("email", event.target.value)
                                 }
                                 required
                                 autoComplete="email"
@@ -303,7 +345,7 @@ export default function Checkout({
                         <input
                             value={form.data.notes}
                             onChange={(event) =>
-                                form.setData('notes', event.target.value)
+                                form.setData("notes", event.target.value)
                             }
                             placeholder="Extra hot, light ice…"
                             className={fieldClasses}
@@ -331,43 +373,158 @@ export default function Checkout({
                                             key={option.label}
                                             type="button"
                                             onClick={() => {
+                                                setTipChoice(option.label);
                                                 setTipCents(option.cents);
-                                                setCustomTip('');
+                                                setCustomTip("");
                                             }}
                                             className={`font-hand rounded-full border-2 px-4 py-2 text-lg transition ${
-                                                tipCents === option.cents &&
-                                                customTip === ''
-                                                    ? 'border-lav-700 bg-lav-600 text-white'
-                                                    : 'border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed'
+                                                tipChoice === option.label
+                                                    ? "border-lav-700 bg-lav-600 text-white"
+                                                    : "border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed"
                                             }`}
                                         >
                                             {option.label}
                                         </button>
                                     ))}
-                                    <input
-                                        inputMode="decimal"
-                                        value={customTip}
-                                        onChange={(event) => {
-                                            setCustomTip(event.target.value);
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setTipChoice("Custom");
                                             setTipCents(
-                                                Math.max(
-                                                    0,
-                                                    Math.round(
-                                                        Number(
-                                                            event.target
-                                                                .value || 0,
-                                                        ) * 100,
-                                                    ),
+                                                customTipCents(
+                                                    customTip,
+                                                    cart.subtotal.cents,
+                                                    customTipMode,
                                                 ),
                                             );
                                         }}
-                                        placeholder="Custom"
-                                        aria-label="Custom tip in dollars"
-                                        className="border-lav-300 font-hand text-lav-800 focus:border-lav-600 w-28 rounded-full border-2 bg-white px-4 py-2 text-lg outline-none"
-                                    />
+                                        className={`font-hand rounded-full border-2 px-4 py-2 text-lg transition ${
+                                            tipChoice === "Custom"
+                                                ? "border-lav-700 bg-lav-600 text-white"
+                                                : "border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed"
+                                        }`}
+                                    >
+                                        Custom
+                                    </button>
+
+                                    {tipChoice === "Custom" && (
+                                        <div className="mt-3 grid w-full gap-2 sm:grid-cols-[auto_1fr]">
+                                            <div
+                                                className="border-lav-400 flex rounded-full border-2 bg-white p-1"
+                                                role="group"
+                                                aria-label="Custom tip type"
+                                            >
+                                                {[
+                                                    {
+                                                        label: "%",
+                                                        mode: "percent" as const,
+                                                    },
+                                                    {
+                                                        label: "$",
+                                                        mode: "dollars" as const,
+                                                    },
+                                                ].map((option) => (
+                                                    <button
+                                                        key={option.mode}
+                                                        type="button"
+                                                        aria-pressed={
+                                                            customTipMode ===
+                                                            option.mode
+                                                        }
+                                                        onClick={() => {
+                                                            setTipChoice(
+                                                                "Custom",
+                                                            );
+                                                            setCustomTipMode(
+                                                                option.mode,
+                                                            );
+                                                            setTipCents(
+                                                                customTipCents(
+                                                                    customTip,
+                                                                    cart
+                                                                        .subtotal
+                                                                        .cents,
+                                                                    option.mode,
+                                                                ),
+                                                            );
+                                                        }}
+                                                        className={`font-hand grid size-10 place-items-center rounded-full text-lg transition ${
+                                                            customTipMode ===
+                                                            option.mode
+                                                                ? "bg-lav-600 text-white"
+                                                                : "text-lav-700 hover:bg-lav-200"
+                                                        }`}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <input
+                                                inputMode="decimal"
+                                                value={customTip}
+                                                onChange={(event) => {
+                                                    const value =
+                                                        event.target.value;
+
+                                                    setCustomTip(value);
+                                                    setTipCents(
+                                                        customTipCents(
+                                                            value,
+                                                            cart.subtotal.cents,
+                                                            customTipMode,
+                                                        ),
+                                                    );
+                                                }}
+                                                aria-label={
+                                                    customTipMode === "percent"
+                                                        ? "Custom tip percentage"
+                                                        : "Custom tip amount in dollars"
+                                                }
+                                                className="border-lav-300 font-hand text-lav-800 focus:border-lav-600 w-full rounded-full border-2 bg-white px-4 py-2 text-lg outline-none"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
+
+                        <div
+                            className={
+                                paymentMethods.applePayReady ||
+                                paymentMethods.googlePayReady
+                                    ? ""
+                                    : "pointer-events-none absolute -left-[100vw] top-0 w-full opacity-0"
+                            }
+                        >
+                            <div className="grid w-full gap-3">
+                                {paymentMethods.applePayReady && (
+                                    <button
+                                        type="button"
+                                        aria-label={`Pay ${paymentTotal} with Apple Pay`}
+                                        onClick={() =>
+                                            pay(paymentMethods.tokenizeApplePay)
+                                        }
+                                        disabled={
+                                            form.processing || !cart.valid
+                                        }
+                                        className="apple-pay-button wallet-pay-button h-12 rounded-xl disabled:opacity-40"
+                                    />
+                                )}
+                                <div
+                                    id={GOOGLE_PAY_CONTAINER_ID}
+                                    className={
+                                        paymentMethods.googlePayReady
+                                            ? "wallet-pay-button min-h-12 w-full"
+                                            : "wallet-pay-button h-12 w-full"
+                                    }
+                                    onClick={() =>
+                                        void pay(
+                                            paymentMethods.tokenizeGooglePay,
+                                        )
+                                    }
+                                />
+                            </div>
+                        </div>
 
                         <div>
                             <h3 className="font-marker text-lav-800 mb-2 text-xl">
@@ -383,30 +540,27 @@ export default function Checkout({
                                     </p>
                                 )}
                             </div>
-                            {card.error && (
+                            {paymentMethods.error && (
                                 <p className="font-hand mt-2 text-base text-rose-700">
-                                    {card.error}
+                                    {paymentMethods.error}
                                 </p>
                             )}
                         </div>
 
                         <button
                             type="button"
-                            onClick={pay}
+                            onClick={() => pay(paymentMethods.tokenizeCard)}
                             disabled={
-                                form.processing || !card.ready || !cart.valid
+                                form.processing ||
+                                !paymentMethods.cardReady ||
+                                !cart.valid
                             }
                             className="sticker bg-lav-600 font-marker hover:bg-lav-700 mt-2 w-full rounded-full py-3 text-lg text-white transition disabled:opacity-40"
                         >
                             {form.processing
-                                ? 'Processing…'
-                                : `Pay ${formatCents(cart.subtotal.cents + tipCents, currency)}`}
+                                ? "Processing…"
+                                : `Pay ${paymentTotal}`}
                         </button>
-
-                        <p className="font-hand text-lav-500 text-center text-base">
-                            Card details go straight to Square. We never see
-                            them.
-                        </p>
                     </div>
                 </section>
             </div>

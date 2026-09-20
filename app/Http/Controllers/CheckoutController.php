@@ -8,7 +8,7 @@ use App\Actions\Cart\PriceCart;
 use App\Actions\Checkout\CheckoutException;
 use App\Actions\Checkout\CreateCheckout;
 use App\Actions\Checkout\PayOrder;
-use App\Actions\Orders\CalculateOrderEta;
+use App\Actions\Checkout\PreviewCheckoutPricing;
 use App\Cart\CartSession;
 use App\Http\Requests\CheckoutRequest;
 use App\Square\SquareClient;
@@ -21,21 +21,23 @@ class CheckoutController extends Controller
 {
     public function show(
         PriceCart $priceCart,
+        PreviewCheckoutPricing $previewPricing,
         CartSession $cart,
-        CalculateOrderEta $eta,
         SquareClient $square,
     ): Response {
         $priced = $priceCart->handle($cart);
 
         return Inertia::render('checkout/index', [
             'cart' => $priced->toArray(),
-            'estimatedReadyAt' => $priced->isEmpty() ? null : $eta->forCart($priced)->toIso8601String(),
+            'pricingPreview' => $previewPricing->handle($priced, $square),
             // The application and location IDs are public by design: the Web
             // Payments SDK needs them in the browser to tokenize a card.
             'square' => [
                 'applicationId' => config('square.application_id'),
                 'locationId' => $square->locationId(),
                 'sdkUrl' => config('square.web_payments_sdk.'.config('square.environment')),
+                'countryCode' => config('square.country_code'),
+                'currencyCode' => config('square.currency'),
                 'configured' => $square->isConfigured() && config('square.application_id') !== null,
             ],
             'allowTipping' => (bool) config('square.allow_tipping', true),
