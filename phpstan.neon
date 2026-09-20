@@ -1,0 +1,20 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+
+parameters:
+    paths:
+        - app/
+        - bootstrap/app.php
+        - config/
+        - database/
+        - routes/
+
+    # tests/ is not analysed: Pest's fluent API needs pestphp/pest-plugin-phpstan,
+    # and without it every `it(...)->get(...)` reads as an undefined method.
+
+    level: 7
+
+    # Trust our own PHPDoc types, so a redundant check is reported rather than
+    # silently accepted.
+    treatPhpDocTypesAsCertain: true

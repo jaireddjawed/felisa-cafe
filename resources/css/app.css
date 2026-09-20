@@ -1,0 +1,155 @@
+@import 'tailwindcss';
+
+@source '../views';
+@source '../js';
+
+/* ── Felisa Cafe — "Sticker Doodle" ─────────────────────────────────────────
+   The Instagram grid translated straight to the web: marker lettering, white
+   cut-out sticker edges, sparkles, and cards that sit slightly off-square.  */
+
+@theme {
+    --color-lav-50: #faf5ff;
+    --color-lav-100: #f1e7fd;
+    --color-lav-200: #e7d9f8;
+    --color-lav-300: #d5c0f0;
+    --color-lav-400: #b894e4;
+    --color-lav-500: #9b6bd8;
+    --color-lav-600: #7c4dbe;
+    --color-lav-700: #5f3a95;
+    --color-lav-800: #4b2a7b;
+    --color-lav-900: #331a56;
+
+    --color-ink: #4b2a7b;
+    --color-matcha: #7fa653;
+
+    --font-marker: 'Gloria Hallelujah', 'Comic Sans MS', cursive;
+    --font-hand: 'Patrick Hand', ui-rounded, cursive;
+    --font-body: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    overflow-x: clip;
+}
+
+body {
+    background-color: var(--color-lav-200);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    overflow-x: clip;
+    /* Faint paper grain so flat lavender does not read as a plastic screen. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+::selection {
+    background: var(--color-lav-500);
+    color: #fff;
+}
+
+/* A white cut-out edge, the way a sticker sits on top of a photo. */
+@utility sticker {
+    border: 4px solid #fff;
+    box-shadow:
+        0 0 0 2px var(--color-lav-400),
+        8px 10px 0 -2px rgba(75, 42, 123, 0.18);
+}
+
+/* Blobby, hand-cut corners — never the same radius twice. */
+@utility blob {
+    border-radius: 62% 38% 55% 45% / 48% 58% 42% 52%;
+}
+
+@utility blob-alt {
+    border-radius: 40% 60% 45% 55% / 58% 42% 56% 44%;
+}
+
+/* Marker lettering wants a soft chalky edge, not a crisp vector one. */
+@utility chalk {
+    text-shadow:
+        0 0 1px rgba(255, 255, 255, 0.9),
+        0 2px 0 rgba(255, 255, 255, 0.55);
+}
+
+@utility outline-hand {
+    -webkit-text-stroke: 6px #fff;
+    paint-order: stroke fill;
+}
+
+@keyframes twinkle {
+    0%,
+    100% {
+        opacity: 0.25;
+        transform: scale(0.8) rotate(0deg);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.15) rotate(25deg);
+    }
+}
+
+@keyframes bob {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@utility twinkle {
+    animation: twinkle 3.2s ease-in-out infinite;
+}
+
+@utility bob {
+    animation: bob 6s ease-in-out infinite;
+}
+
+@utility apple-pay-button {
+    -webkit-appearance: -apple-pay-button;
+    -apple-pay-button-type: plain;
+    -apple-pay-button-style: black;
+}
+
+@utility wallet-pay-button {
+    width: 100%;
+}
+
+.wallet-pay-button > *,
+.wallet-pay-button iframe,
+.wallet-pay-button button {
+    width: 100% !important;
+    max-width: none !important;
+}
+
+@layer base {
+    /* Form controls inherit the handwritten type rather than the browser's. */
+    input,
+    textarea,
+    button,
+    select {
+        font: inherit;
+        color: inherit;
+    }
+
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']),
+    summary {
+        cursor: pointer;
+    }
+
+    button:disabled,
+    [aria-disabled='true'] {
+        cursor: not-allowed;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
