@@ -1,13 +1,13 @@
-import { Head, Link, useForm, usePage } from "@inertiajs/react";
-import { useMemo, useState } from "react";
-import { CatFace, Sparkle, SquiggleRule } from "@/components/doodles";
-import { useSquareCard } from "@/hooks/use-square-card";
-import { menu } from "@/routes";
-import { store } from "@/routes/checkout";
-import type { Cart, Money, SharedProps } from "@/types";
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
+import { CatFace, Sparkle, SquiggleRule } from '@/components/doodles';
+import { useSquareCard } from '@/hooks/use-square-card';
+import { menu } from '@/routes';
+import { store } from '@/routes/checkout';
+import type { Cart, Money, SharedProps } from '@/types';
 
-const CARD_CONTAINER_ID = "square-card";
-const GOOGLE_PAY_CONTAINER_ID = "square-google-pay";
+const CARD_CONTAINER_ID = 'square-card';
+const GOOGLE_PAY_CONTAINER_ID = 'square-google-pay';
 
 type Props = {
     cart: Cart;
@@ -27,8 +27,8 @@ type Props = {
 };
 
 function formatCents(cents: number, currency: string): string {
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
         currency,
     }).format(cents / 100);
 }
@@ -36,21 +36,21 @@ function formatCents(cents: number, currency: string): string {
 function customTipCents(
     value: string,
     subtotalCents: number,
-    mode: "dollars" | "percent",
+    mode: 'dollars' | 'percent',
 ): number {
     const trimmed = value.trim();
 
-    if (trimmed === "") {
+    if (trimmed === '') {
         return 0;
     }
 
-    const numeric = Number(trimmed.replace(/[$,]/g, ""));
+    const numeric = Number(trimmed.replace(/[$,]/g, ''));
 
     if (!Number.isFinite(numeric) || numeric < 0) {
         return 0;
     }
 
-    if (mode === "percent") {
+    if (mode === 'percent') {
         return Math.round(subtotalCents * (numeric / 100));
     }
 
@@ -68,10 +68,10 @@ export default function Checkout({
     const { auth, errors } = usePage<SharedProps>().props;
 
     const form = useForm({
-        name: auth.user?.name ?? "",
-        email: auth.user?.email ?? "",
-        notes: "",
-        source_id: "",
+        name: auth.user?.name ?? '',
+        email: auth.user?.email ?? '',
+        notes: '',
+        source_id: '',
         tip_cents: 0,
         // Generated once per visit and reused on every retry, so a declined
         // card followed by a second attempt resumes one order rather than
@@ -80,10 +80,10 @@ export default function Checkout({
     });
 
     const [tipCents, setTipCents] = useState(0);
-    const [tipChoice, setTipChoice] = useState("No tip");
-    const [customTip, setCustomTip] = useState("");
-    const [customTipMode, setCustomTipMode] = useState<"percent" | "dollars">(
-        "percent",
+    const [tipChoice, setTipChoice] = useState('No tip');
+    const [customTip, setCustomTip] = useState('');
+    const [customTipMode, setCustomTipMode] = useState<'percent' | 'dollars'>(
+        'percent',
     );
     const [cardError, setCardError] = useState<string | null>(null);
 
@@ -91,9 +91,9 @@ export default function Checkout({
 
     const tipOptions = useMemo(
         () => [
-            { label: "No tip", cents: 0 },
-            { label: "15%", cents: Math.round(cart.subtotal.cents * 0.15) },
-            { label: "20%", cents: Math.round(cart.subtotal.cents * 0.2) },
+            { label: 'No tip', cents: 0 },
+            { label: '15%', cents: Math.round(cart.subtotal.cents * 0.15) },
+            { label: '20%', cents: Math.round(cart.subtotal.cents * 0.2) },
         ],
         [cart.subtotal.cents],
     );
@@ -108,14 +108,14 @@ export default function Checkout({
             currencyCode: square.currencyCode,
             total: {
                 amount: (paymentTotalCents / 100).toFixed(2),
-                label: "Felisa Cafe",
+                label: 'Felisa Cafe',
             },
         }),
         [paymentTotalCents, square.countryCode, square.currencyCode],
     );
 
     const paymentMethods = useSquareCard({
-        applicationId: square.applicationId ?? "",
+        applicationId: square.applicationId ?? '',
         locationId: square.locationId,
         sdkUrl: square.sdkUrl,
         cardSelector: `#${CARD_CONTAINER_ID}`,
@@ -144,14 +144,14 @@ export default function Checkout({
             setCardError(
                 caught instanceof Error
                     ? caught.message
-                    : "That payment method could not be read.",
+                    : 'That payment method could not be read.',
             );
         }
     }
 
     if (cart.lines.length === 0) {
         return (
-            <div className="mx-auto max-w-3xl px-5 py-12">
+            <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-5 sm:py-12">
                 <Head title="Checkout" />
                 <h1 className="font-marker text-lav-800 text-4xl sm:text-5xl">
                     Checkout
@@ -174,10 +174,10 @@ export default function Checkout({
     }
 
     const fieldClasses =
-        "rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600";
+        'rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600';
 
     return (
-        <div className="mx-auto max-w-3xl px-5 py-12">
+        <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-5 sm:py-12">
             <Head title="Checkout" />
 
             <Link
@@ -209,7 +209,7 @@ export default function Checkout({
 
             <div className="grid gap-6">
                 {/* ── 1. The order ───────────────────────────────────────── */}
-                <section className="sticker bg-lav-100 rounded-3xl p-6">
+                <section className="sticker bg-lav-100 w-full max-w-full rounded-3xl p-5 sm:p-6">
                     <div className="border-lav-300 flex items-center gap-2 border-b-2 border-dashed pb-3">
                         <CatFace size={24} className="text-lav-600" />
                         <h2 className="font-marker text-lav-800 text-2xl">
@@ -223,18 +223,18 @@ export default function Checkout({
                                 key={line.id}
                                 className="py-3 first:pt-0 last:pb-0"
                             >
-                                <div className="flex items-baseline justify-between gap-3">
-                                    <p className="font-marker text-lav-800 text-lg">
+                                <div className="flex min-w-0 items-baseline justify-between gap-3">
+                                    <p className="font-marker text-lav-800 min-w-0 text-lg">
                                         <span className="font-hand text-lav-700 mr-2 text-xl font-bold">
                                             {line.quantity}×
                                         </span>
                                         {line.productName}
                                     </p>
-                                    <p className="font-hand text-lav-700 text-xl">
+                                    <p className="font-hand text-lav-700 shrink-0 text-xl">
                                         {line.total.formatted}
                                     </p>
                                 </div>
-                                <p className="font-hand text-lav-600 mt-0.5 text-base">
+                                <p className="font-hand text-lav-600 mt-0.5 text-base break-words">
                                     {[
                                         line.variationName,
                                         ...line.modifiers.map(
@@ -242,7 +242,7 @@ export default function Checkout({
                                         ),
                                     ]
                                         .filter(Boolean)
-                                        .join(" · ")}
+                                        .join(' · ')}
                                 </p>
                             </li>
                         ))}
@@ -287,7 +287,7 @@ export default function Checkout({
                 </section>
 
                 {/* ── 2. Contact details ─────────────────────────────────── */}
-                <section className="sticker bg-lav-100 rounded-3xl p-6">
+                <section className="sticker bg-lav-100 w-full max-w-full rounded-3xl p-5 sm:p-6">
                     <div className="border-lav-300 flex items-center justify-between border-b-2 border-dashed pb-3">
                         <h2 className="font-marker text-lav-800 text-2xl">
                             Contact details
@@ -305,7 +305,7 @@ export default function Checkout({
                             <input
                                 value={form.data.name}
                                 onChange={(event) =>
-                                    form.setData("name", event.target.value)
+                                    form.setData('name', event.target.value)
                                 }
                                 required
                                 autoComplete="name"
@@ -325,7 +325,7 @@ export default function Checkout({
                                 type="email"
                                 value={form.data.email}
                                 onChange={(event) =>
-                                    form.setData("email", event.target.value)
+                                    form.setData('email', event.target.value)
                                 }
                                 required
                                 autoComplete="email"
@@ -345,7 +345,7 @@ export default function Checkout({
                         <input
                             value={form.data.notes}
                             onChange={(event) =>
-                                form.setData("notes", event.target.value)
+                                form.setData('notes', event.target.value)
                             }
                             placeholder="Extra hot, light ice…"
                             className={fieldClasses}
@@ -354,7 +354,7 @@ export default function Checkout({
                 </section>
 
                 {/* ── 3. Payment details ─────────────────────────────────── */}
-                <section className="sticker bg-lav-100 rounded-3xl p-6">
+                <section className="sticker bg-lav-100 w-full max-w-full rounded-3xl p-5 sm:p-6">
                     <div className="border-lav-300 border-b-2 border-dashed pb-3">
                         <h2 className="font-marker text-lav-800 text-2xl">
                             Payment details
@@ -375,12 +375,12 @@ export default function Checkout({
                                             onClick={() => {
                                                 setTipChoice(option.label);
                                                 setTipCents(option.cents);
-                                                setCustomTip("");
+                                                setCustomTip('');
                                             }}
                                             className={`font-hand rounded-full border-2 px-4 py-2 text-lg transition ${
                                                 tipChoice === option.label
-                                                    ? "border-lav-700 bg-lav-600 text-white"
-                                                    : "border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed"
+                                                    ? 'border-lav-700 bg-lav-600 text-white'
+                                                    : 'border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed'
                                             }`}
                                         >
                                             {option.label}
@@ -389,7 +389,7 @@ export default function Checkout({
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setTipChoice("Custom");
+                                            setTipChoice('Custom');
                                             setTipCents(
                                                 customTipCents(
                                                     customTip,
@@ -399,15 +399,15 @@ export default function Checkout({
                                             );
                                         }}
                                         className={`font-hand rounded-full border-2 px-4 py-2 text-lg transition ${
-                                            tipChoice === "Custom"
-                                                ? "border-lav-700 bg-lav-600 text-white"
-                                                : "border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed"
+                                            tipChoice === 'Custom'
+                                                ? 'border-lav-700 bg-lav-600 text-white'
+                                                : 'border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed'
                                         }`}
                                     >
                                         Custom
                                     </button>
 
-                                    {tipChoice === "Custom" && (
+                                    {tipChoice === 'Custom' && (
                                         <div className="mt-3 grid w-full gap-2 sm:grid-cols-[auto_1fr]">
                                             <div
                                                 className="border-lav-400 flex rounded-full border-2 bg-white p-1"
@@ -416,12 +416,12 @@ export default function Checkout({
                                             >
                                                 {[
                                                     {
-                                                        label: "%",
-                                                        mode: "percent" as const,
+                                                        label: '%',
+                                                        mode: 'percent' as const,
                                                     },
                                                     {
-                                                        label: "$",
-                                                        mode: "dollars" as const,
+                                                        label: '$',
+                                                        mode: 'dollars' as const,
                                                     },
                                                 ].map((option) => (
                                                     <button
@@ -433,7 +433,7 @@ export default function Checkout({
                                                         }
                                                         onClick={() => {
                                                             setTipChoice(
-                                                                "Custom",
+                                                                'Custom',
                                                             );
                                                             setCustomTipMode(
                                                                 option.mode,
@@ -451,8 +451,8 @@ export default function Checkout({
                                                         className={`font-hand grid size-10 place-items-center rounded-full text-lg transition ${
                                                             customTipMode ===
                                                             option.mode
-                                                                ? "bg-lav-600 text-white"
-                                                                : "text-lav-700 hover:bg-lav-200"
+                                                                ? 'bg-lav-600 text-white'
+                                                                : 'text-lav-700 hover:bg-lav-200'
                                                         }`}
                                                     >
                                                         {option.label}
@@ -476,9 +476,9 @@ export default function Checkout({
                                                     );
                                                 }}
                                                 aria-label={
-                                                    customTipMode === "percent"
-                                                        ? "Custom tip percentage"
-                                                        : "Custom tip amount in dollars"
+                                                    customTipMode === 'percent'
+                                                        ? 'Custom tip percentage'
+                                                        : 'Custom tip amount in dollars'
                                                 }
                                                 className="border-lav-300 font-hand text-lav-800 focus:border-lav-600 w-full rounded-full border-2 bg-white px-4 py-2 text-lg outline-none"
                                             />
@@ -492,8 +492,8 @@ export default function Checkout({
                             className={
                                 paymentMethods.applePayReady ||
                                 paymentMethods.googlePayReady
-                                    ? ""
-                                    : "pointer-events-none absolute -left-[100vw] top-0 w-full opacity-0"
+                                    ? ''
+                                    : 'pointer-events-none absolute top-0 -left-[100vw] w-full opacity-0'
                             }
                         >
                             <div className="grid w-full gap-3">
@@ -514,8 +514,8 @@ export default function Checkout({
                                     id={GOOGLE_PAY_CONTAINER_ID}
                                     className={
                                         paymentMethods.googlePayReady
-                                            ? "wallet-pay-button min-h-12 w-full"
-                                            : "wallet-pay-button h-12 w-full"
+                                            ? 'wallet-pay-button min-h-12 w-full'
+                                            : 'wallet-pay-button h-12 w-full'
                                     }
                                     onClick={() =>
                                         void pay(
@@ -558,7 +558,7 @@ export default function Checkout({
                             className="sticker bg-lav-600 font-marker hover:bg-lav-700 mt-2 w-full rounded-full py-3 text-lg text-white transition disabled:opacity-40"
                         >
                             {form.processing
-                                ? "Processing…"
+                                ? 'Processing…'
                                 : `Pay ${paymentTotal}`}
                         </button>
                     </div>

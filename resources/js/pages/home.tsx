@@ -26,7 +26,7 @@ export default function Home({ signatures, takeHome }: Props) {
             <Head title="Ube, matcha, and housemade everything" />
 
             {/* ── Hero ───────────────────────────────────────────────────── */}
-            <section className="relative overflow-hidden px-5 pt-14 pb-16 sm:pt-20">
+            <section className="relative overflow-hidden px-4 pt-14 pb-16 sm:px-5 sm:pt-20">
                 <Sparkle
                     size={46}
                     className="twinkle text-lav-400 absolute top-10 left-[6%]"
@@ -40,14 +40,14 @@ export default function Home({ signatures, takeHome }: Props) {
                     className="twinkle text-lav-300 absolute bottom-16 left-[18%]"
                 />
 
-                <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-                    <div>
-                        <p className="font-hand text-lav-600 flex items-center gap-2 text-xl">
+                <div className="mx-auto grid max-w-6xl min-w-0 items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+                    <div className="min-w-0">
+                        <p className="font-hand text-lav-600 flex max-w-full flex-wrap items-center gap-2 text-xl">
                             <CatFace size={26} /> Filipino-American coffee bar ·
                             Fullerton
                         </p>
 
-                        <h1 className="font-marker text-lav-800 mt-4 text-5xl leading-[1.15] sm:text-6xl lg:text-7xl">
+                        <h1 className="font-marker text-lav-800 mt-4 max-w-full text-5xl leading-[1.15] sm:text-6xl lg:text-7xl">
                             Ube in the
                             <br />
                             bottom of
@@ -55,7 +55,7 @@ export default function Home({ signatures, takeHome }: Props) {
                             every cup.
                         </h1>
 
-                        <p className="font-hand text-lav-700 mt-6 max-w-md text-2xl leading-snug">
+                        <p className="font-hand text-lav-700 mt-6 max-w-full text-2xl leading-snug sm:max-w-md">
                             Housemade syrups, matcha or espresso in anything,
                             and five milks that never cost extra. Drawn, poured,
                             and named by us.
@@ -77,7 +77,7 @@ export default function Home({ signatures, takeHome }: Props) {
                         </div>
                     </div>
 
-                    <div className="relative grid place-items-center">
+                    <div className="relative grid min-w-0 place-items-center">
                         <div className="blob bg-lav-300/70 absolute inset-6" />
                         <div className="relative flex items-end gap-2 sm:gap-5">
                             {signatures.slice(0, 3).map((drink, index) => (

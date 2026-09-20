@@ -149,13 +149,7 @@ export function useSquareCard({
             setApplePayReady(false);
             setGooglePayReady(false);
         };
-    }, [
-        applicationId,
-        cardSelector,
-        enabled,
-        locationId,
-        sdkUrl,
-    ]);
+    }, [applicationId, cardSelector, enabled, locationId, sdkUrl]);
 
     useEffect(() => {
         if (!enabled || !payments.current || !cardReady) {
@@ -170,9 +164,8 @@ export function useSquareCard({
 
         const attachWallets = async () => {
             try {
-                const attachedApplePay = await payments.current?.applePay(
-                    request,
-                );
+                const attachedApplePay =
+                    await payments.current?.applePay(request);
 
                 if (!cancelled && attachedApplePay) {
                     applePay.current = attachedApplePay;
@@ -184,9 +177,8 @@ export function useSquareCard({
             }
 
             try {
-                const attachedGooglePay = await payments.current?.googlePay(
-                    request,
-                );
+                const attachedGooglePay =
+                    await payments.current?.googlePay(request);
 
                 if (!attachedGooglePay) {
                     return;
