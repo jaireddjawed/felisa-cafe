@@ -90,6 +90,7 @@ function checkoutPayload(array $overrides = []): array
     return [
         'name' => 'Jaired',
         'email' => 'jaired@example.com',
+        'phone' => '+31612345678',
         'source_id' => 'cnon:card-nonce-ok',
         'idempotency_key' => 'checkout-key-0000000001',
         ...$overrides,
