@@ -94,7 +94,7 @@ export function SquiggleRule({ className = '' }: { className?: string }) {
             strokeWidth={5}
             strokeLinecap="round"
         >
-            <path d="M4 14c50-12 100 10 150 0s100-16 150-4 100 14 150 4 100-16 150-4 100 14 150 4 100-16 150-4 96 12 142 2" />
+            <path d="M4 14c50-12 100 10 150 0s100-16 150-4 100 14 150 4 100-16 150-4 100 14 150 4 100-16 150-4 100 14 150 4 96 12 142 2" />
         </svg>
     );
 }
