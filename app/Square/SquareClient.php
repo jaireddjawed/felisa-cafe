@@ -190,9 +190,9 @@ class SquareClient
                 'state' => 'PROPOSED',
                 'pickup_details' => array_filter([
                     'recipient' => array_filter([
-                        'display_name' => $customer?->name ?? '',
-                        'email_address' => $customer?->email ?? '',
-                        'phone_number' => $customer?->phone ?? '',
+                        'display_name' => $customer->name ?? '',
+                        'email_address' => $customer->email ?? '',
+                        'phone_number' => $customer->phone ?? '',
                     ], fn (string $value): bool => $value !== ''),
                     'schedule_type' => 'ASAP',
                     'prep_time_duration' => 'PT'.max(1, $prepMinutes).'M',
