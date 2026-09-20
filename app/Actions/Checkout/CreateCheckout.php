@@ -153,7 +153,6 @@ class CreateCheckout
                 'status' => OrderStatus::PendingPayment,
                 'customer_name' => $customer->name,
                 'customer_email' => $customer->email,
-                'customer_phone' => $customer->phone,
                 'notes' => $notes,
                 'subtotal_cents' => $priced->subtotal->cents,
                 'tax_cents' => 0,
@@ -230,7 +229,6 @@ class CreateCheckout
                 customer: new CustomerContact(
                     $order->customer_name,
                     $order->customer_email,
-                    $order->customer_phone,
                 ),
                 note: $order->notes,
                 prepMinutes: $this->prepMinutes($order),

@@ -301,7 +301,6 @@ final class FakeSquareClient implements SquareGateway
                     'recipient' => [
                         'display_name' => $customer->name,
                         'email_address' => $customer->email,
-                        'phone_number' => $customer->phone,
                     ],
                     'schedule_type' => 'ASAP',
                     'prep_time_duration' => 'PT'.max(1, $prepMinutes).'M',

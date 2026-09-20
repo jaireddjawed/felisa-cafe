@@ -70,7 +70,6 @@ export default function Checkout({
     const form = useForm({
         name: auth.user?.name ?? '',
         email: auth.user?.email ?? '',
-        phone: '',
         notes: '',
         source_id: '',
         tip_cents: 0,
@@ -191,15 +190,6 @@ export default function Checkout({
                 Checkout
             </h1>
             <SquiggleRule className="text-lav-400 my-5 h-5 w-full" />
-
-            {(errors.checkout || cardError) && (
-                <p
-                    className="sticker font-hand mb-6 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 text-lg text-rose-800"
-                    role="alert"
-                >
-                    {errors.checkout ?? cardError}
-                </p>
-            )}
 
             {!cart.valid && (
                 <p className="sticker font-hand mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-lg text-amber-900">
@@ -336,26 +326,6 @@ export default function Checkout({
                             {form.errors.email && (
                                 <span className="font-hand text-base text-rose-700">
                                     {form.errors.email}
-                                </span>
-                            )}
-                        </label>
-
-                        <label className="font-hand text-lav-700 grid gap-1 text-xl">
-                            Phone
-                            <input
-                                type="tel"
-                                value={form.data.phone}
-                                onChange={(event) =>
-                                    form.setData('phone', event.target.value)
-                                }
-                                required
-                                autoComplete="tel"
-                                placeholder="+31 6 12345678"
-                                className={fieldClasses}
-                            />
-                            {form.errors.phone && (
-                                <span className="font-hand text-base text-rose-700">
-                                    {form.errors.phone}
                                 </span>
                             )}
                         </label>
@@ -567,6 +537,15 @@ export default function Checkout({
                                 </p>
                             )}
                         </div>
+
+                        {(errors.checkout || cardError) && (
+                            <p
+                                className="sticker font-hand rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 text-lg text-rose-800"
+                                role="alert"
+                            >
+                                {errors.checkout ?? cardError}
+                            </p>
+                        )}
 
                         <button
                             type="button"
