@@ -107,6 +107,25 @@ final class FakeSquareClient implements SquareGateway
         ]);
     }
 
+    /**
+     * @param  list<string>  $itemIds
+     * @return list<string>
+     */
+    public function deleteCatalogItems(array $itemIds): array
+    {
+        $deletedIds = [];
+
+        foreach (array_chunk($itemIds, 200) as $itemIdBatch) {
+            $body = $this->request('POST', '/v2/catalog/batch-delete', [
+                'object_ids' => $itemIdBatch,
+            ]);
+
+            $deletedIds = [...$deletedIds, ...Json::strings($body, 'deleted_object_ids')];
+        }
+
+        return array_values(array_unique($deletedIds));
+    }
+
     public function calculateOrder(string $idempotencyKey, array $lines): OrderPricing
     {
         $body = $this->request('POST', '/v2/orders/calculate', [
