@@ -12,25 +12,45 @@ use App\Square\Data\OrderPricing;
 use App\Square\Data\OrderState;
 use App\Square\Data\PaymentResult;
 use Carbon\CarbonImmutable;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
+use LogicException;
+use Square\Catalog\Requests\BatchGetCatalogObjectsRequest;
+use Square\Catalog\Requests\BatchUpsertCatalogObjectsRequest;
+use Square\Catalog\Requests\ListCatalogRequest;
+use Square\Exceptions\SquareApiException as SquareSdkApiException;
+use Square\Exceptions\SquareException as SquareSdkException;
+use Square\Orders\Requests\CalculateOrderRequest;
+use Square\Orders\Requests\GetOrdersRequest;
+use Square\Payments\Requests\CreatePaymentRequest;
+use Square\SquareClient;
+use Square\Types\CatalogObject;
+use Square\Types\CatalogObjectBatch;
+use Square\Types\CreateOrderRequest;
+use Square\Types\Currency;
+use Square\Types\Money;
+use Square\Types\Order;
+use Square\Utils\WebhooksHelper;
+use Throwable;
 
 /**
- * The only class that talks to Square.
- *
- * It speaks Square's documented v2 REST API over Laravel's HTTP client, which
- * keeps the dependency surface to something the whole team already knows and
- * lets tests use Http::fake() against real Square payloads.
+ * The production implementation of the application's Square boundary.
  *
  * Every failure leaves the caller with one of two answers:
  * SquareRejectedException ("this request can never succeed") or
  * SquareUnavailableException ("unknown; retry with the same idempotency key").
  */
-class SquareClient
+final class SquareSdkGateway implements SquareGateway
 {
+    private const REQUEST_TIMEOUT_STATUS = 408;
+
+    private const TOO_MANY_REQUESTS_STATUS = 429;
+
+    private const SERVER_ERROR_STATUS = 500;
+
     private readonly CatalogMapper $mapper;
+
+    private readonly bool $configured;
+
+    private readonly SquareClient $squareClient;
 
     public function __construct(
         private readonly ?string $accessToken,
@@ -43,11 +63,21 @@ class SquareClient
         private readonly ?string $webhookUrl,
     ) {
         $this->mapper = new CatalogMapper($this->locationId, $this->currency);
+        $this->configured = $this->accessToken !== null && $this->accessToken !== '' && $this->locationId !== '';
+        $this->squareClient = new SquareClient(
+            token: $this->accessToken ?? '',
+            version: $this->apiVersion,
+            options: [
+                'baseUrl' => (string) config("square.hosts.{$this->environment}"),
+                'timeout' => $this->timeoutSeconds,
+                'maxRetries' => 2,
+            ],
+        );
     }
 
     public function isConfigured(): bool
     {
-        return $this->accessToken !== null && $this->accessToken !== '' && $this->locationId !== '';
+        return $this->configured;
     }
 
     public function currency(): string
@@ -70,21 +100,14 @@ class SquareClient
      */
     public function fetchCatalog(): CatalogSnapshot
     {
-        $objects = [];
-        $cursor = null;
+        $pager = $this->send(
+            fn (): mixed => $this->squareClient->catalog->list(new ListCatalogRequest([
+                'types' => 'ITEM,MODIFIER_LIST,CATEGORY',
+            ])),
+            'catalog.list',
+        );
 
-        do {
-            $query = ['types' => 'ITEM,MODIFIER_LIST,CATEGORY'];
-            if ($cursor !== null) {
-                $query['cursor'] = $cursor;
-            }
-
-            $body = $this->get('/v2/catalog/list', $query);
-            $objects = [...$objects, ...Json::objects($body, 'objects')];
-            $cursor = Json::nullableString($body, 'cursor');
-        } while ($cursor !== null);
-
-        return $this->mapper->snapshot($objects);
+        return $this->mapper->snapshotFromCatalogObjects($pager);
     }
 
     /**
@@ -103,14 +126,17 @@ class SquareClient
             return new LivePrices([], []);
         }
 
-        $body = $this->post('/v2/catalog/batch-retrieve', [
-            'object_ids' => $ids,
-            'include_related_objects' => true,
-        ]);
+        $response = $this->send(
+            fn (): mixed => $this->squareClient->catalog->batchGet(new BatchGetCatalogObjectsRequest([
+                'objectIds' => $ids,
+                'includeRelatedObjects' => true,
+            ])),
+            'catalog.batchGet',
+        );
 
-        [$variations, $modifiers] = $this->mapper->livePrices(
-            Json::objects($body, 'objects'),
-            Json::objects($body, 'related_objects'),
+        [$variations, $modifiers] = $this->mapper->livePricesFromCatalogObjects(
+            $response->getObjects() ?? [],
+            $response->getRelatedObjects() ?? [],
         );
 
         return new LivePrices($variations, $modifiers);
@@ -127,12 +153,20 @@ class SquareClient
             return;
         }
 
-        $this->post('/v2/catalog/batch-upsert', [
-            'idempotency_key' => $idempotencyKey,
-            'batches' => [
-                ['objects' => $objects],
-            ],
-        ]);
+        $this->send(
+            fn (): mixed => $this->squareClient->catalog->batchUpsert(new BatchUpsertCatalogObjectsRequest([
+                'idempotencyKey' => $idempotencyKey,
+                'batches' => [
+                    new CatalogObjectBatch([
+                        'objects' => array_map(
+                            fn (array $object): CatalogObject => CatalogObject::jsonDeserialize($object),
+                            $objects,
+                        ),
+                    ]),
+                ],
+            ])),
+            'catalog.batchUpsert',
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -149,12 +183,16 @@ class SquareClient
      */
     public function calculateOrder(string $idempotencyKey, array $lines): OrderPricing
     {
-        $body = $this->post('/v2/orders/calculate', [
-            'idempotency_key' => $idempotencyKey,
-            'order' => $this->orderPayload(lines: $lines),
-        ]);
+        $response = $this->send(
+            fn (): mixed => $this->squareClient->orders->calculate(new CalculateOrderRequest([
+                'order' => Order::jsonDeserialize($this->orderPayload(lines: $lines)),
+            ]), [
+                'bodyProperties' => ['idempotency_key' => $idempotencyKey],
+            ]),
+            'orders.calculate',
+        );
 
-        $order = Json::object($body, 'order');
+        $order = $this->sdkModelToArray($response->getOrder());
 
         return new OrderPricing(
             totalCents: Json::int($order, 'total_money.amount'),
@@ -174,12 +212,15 @@ class SquareClient
         string $note,
         int $prepMinutes,
     ): OrderState {
-        $body = $this->post('/v2/orders', [
-            'idempotency_key' => $idempotencyKey,
-            'order' => $this->orderPayload($lines, $referenceId, $customer, $note, $prepMinutes),
-        ]);
+        $response = $this->send(
+            fn (): mixed => $this->squareClient->orders->create(new CreateOrderRequest([
+                'idempotencyKey' => $idempotencyKey,
+                'order' => Order::jsonDeserialize($this->orderPayload($lines, $referenceId, $customer, $note, $prepMinutes)),
+            ])),
+            'orders.create',
+        );
 
-        return $this->orderState(Json::object($body, 'order'));
+        return $this->orderState($this->sdkModelToArray($response->getOrder()));
     }
 
     /**
@@ -203,20 +244,24 @@ class SquareClient
         ];
 
         if ($referenceId !== null) {
+            if ($customer === null) {
+                throw new LogicException('A customer is required when creating a Square order.');
+            }
+
             $payload['reference_id'] = $referenceId;
             $payload['fulfillments'] = [[
                 'type' => 'PICKUP',
                 'state' => 'PROPOSED',
                 'pickup_details' => array_filter([
-                    'recipient' => array_filter([
-                        'display_name' => $customer->name ?? '',
-                        'email_address' => $customer->email ?? '',
-                        'phone_number' => $customer->phone ?? '',
-                    ], fn (string $value): bool => $value !== ''),
+                    'recipient' => [
+                        'display_name' => $customer->name,
+                        'email_address' => $customer->email,
+                        'phone_number' => $customer->phone,
+                    ],
                     'schedule_type' => 'ASAP',
                     'prep_time_duration' => 'PT'.max(1, $prepMinutes).'M',
                     'note' => mb_substr($note, 0, 500),
-                ], fn (array|string $value): bool => $value !== '' && $value !== []),
+                ], fn (array|string $value): bool => $value !== ''),
             ]];
             $payload['metadata'] = ['local_order_id' => $referenceId];
         }
@@ -238,26 +283,24 @@ class SquareClient
         string $sourceId,
         CustomerContact $customer,
     ): PaymentResult {
-        $payload = [
-            'source_id' => $sourceId,
-            'idempotency_key' => $idempotencyKey,
-            'amount_money' => ['amount' => $amountCents, 'currency' => $this->currency],
-            'order_id' => $squareOrderId,
-            'location_id' => $this->locationId,
-            'reference_id' => $referenceId,
-            'autocomplete' => true,
-            'note' => "Online order {$referenceId}",
-        ];
+        $response = $this->send(
+            fn (): mixed => $this->squareClient->payments->create(new CreatePaymentRequest([
+                'sourceId' => $sourceId,
+                'idempotencyKey' => $idempotencyKey,
+                'amountMoney' => $this->money($amountCents),
+                'orderId' => $squareOrderId,
+                'locationId' => $this->locationId,
+                'referenceId' => $referenceId,
+                'autocomplete' => true,
+                'note' => "Online order {$referenceId}",
+                'tipMoney' => $tipCents > 0 ? $this->money($tipCents) : null,
+                'buyerEmailAddress' => $customer->email === '' ? null : $customer->email,
+            ])),
+            'payments.create',
+        );
 
-        if ($tipCents > 0) {
-            $payload['tip_money'] = ['amount' => $tipCents, 'currency' => $this->currency];
-        }
-        if ($customer->email !== '') {
-            $payload['buyer_email_address'] = $customer->email;
-        }
-
-        $body = $this->post('/v2/payments', $payload);
-        $paymentId = Json::string($body, 'payment.id');
+        $payment = $this->sdkModelToArray($response->getPayment());
+        $paymentId = Json::string($payment, 'id');
 
         return new PaymentResult($paymentId, $this->getOrder($squareOrderId));
     }
@@ -265,9 +308,12 @@ class SquareClient
     /** Square's authoritative state for an order. */
     public function getOrder(string $squareOrderId): OrderState
     {
-        $body = $this->get("/v2/orders/{$squareOrderId}");
+        $response = $this->send(
+            fn (): mixed => $this->squareClient->orders->get(new GetOrdersRequest(['orderId' => $squareOrderId])),
+            'orders.get',
+        );
 
-        return $this->orderState(Json::object($body, 'order'));
+        return $this->orderState($this->sdkModelToArray($response->getOrder()));
     }
 
     // -----------------------------------------------------------------------
@@ -292,11 +338,12 @@ class SquareClient
             return false;
         }
 
-        $expected = base64_encode(
-            hash_hmac('sha256', $this->webhookUrl.$rawBody, $this->webhookSignatureKey, binary: true)
+        return WebhooksHelper::verifySignature(
+            requestBody: $rawBody,
+            signatureHeader: $signature,
+            signatureKey: $this->webhookSignatureKey,
+            notificationUrl: $this->webhookUrl,
         );
-
-        return hash_equals($expected, $signature);
     }
 
     // -----------------------------------------------------------------------
@@ -374,33 +421,34 @@ class SquareClient
         return $value === null ? null : CarbonImmutable::parse($value);
     }
 
-    // -----------------------------------------------------------------------
-    // HTTP
-    // -----------------------------------------------------------------------
-
-    /**
-     * @param  array<string, string>  $query
-     * @return array<string, mixed>
-     */
-    private function get(string $path, array $query = []): array
+    private function money(int $amountCents): Money
     {
-        return $this->send(fn (PendingRequest $request): Response => $request->get($path, $query), $path);
+        $currency = Currency::tryFrom($this->currency) ?? Currency::Usd;
+
+        return new Money(['amount' => $amountCents, 'currency' => $currency->value]);
     }
 
     /**
-     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
-    private function post(string $path, array $payload): array
+    private function sdkModelToArray(mixed $model): array
     {
-        return $this->send(fn (PendingRequest $request): Response => $request->post($path, $payload), $path);
+        if ($model === null) {
+            return [];
+        }
+
+        $serialized = $model->jsonSerialize();
+
+        return is_array($serialized) ? $serialized : [];
     }
 
     /**
-     * @param  callable(PendingRequest): Response  $send
-     * @return array<string, mixed>
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $send
+     * @return TReturn
      */
-    private function send(callable $send, string $path): array
+    private function send(callable $send, string $operation): mixed
     {
         if (! $this->isConfigured()) {
             throw new SquareNotConfiguredException(
@@ -409,64 +457,48 @@ class SquareClient
         }
 
         try {
-            $response = $send($this->request());
-        } catch (ConnectionException $exception) {
-            // Timeout or network failure: the request may well have succeeded
-            // at Square. Retries must reuse the same idempotency key.
+            return $send();
+        } catch (SquareSdkApiException $exception) {
+            throw $this->failure($exception, $operation);
+        } catch (SquareSdkException $exception) {
             throw new SquareUnavailableException(
-                "Could not reach Square ({$path}): {$exception->getMessage()}",
+                "Could not reach Square ({$operation}): {$exception->getMessage()}",
+                previous: $exception,
+            );
+        } catch (Throwable $exception) {
+            throw new SquareUnavailableException(
+                "Could not reach Square ({$operation}): {$exception->getMessage()}",
                 previous: $exception,
             );
         }
-
-        if ($response->failed()) {
-            throw $this->failure($response, $path);
-        }
-
-        $body = $response->json();
-
-        return is_array($body) ? $body : [];
     }
 
-    private function request(): PendingRequest
+    private function failure(SquareSdkApiException $exception, string $operation): SquareException
     {
-        $host = config("square.hosts.{$this->environment}");
+        $status = $exception->getStatusCode();
+        $detail = $this->errorDetail($exception);
 
-        return Http::baseUrl(is_string($host) ? $host : '')
-            ->withToken((string) $this->accessToken)
-            ->withHeaders(['Square-Version' => $this->apiVersion])
-            ->acceptJson()
-            ->asJson()
-            ->timeout($this->timeoutSeconds)
-            // Only 408/429/5xx reach a retry, and every mutating call carries
-            // an idempotency key, so retrying cannot double-charge.
-            ->retry(2, 200, throw: false);
-    }
-
-    private function failure(Response $response, string $path): SquareException
-    {
-        $status = $response->status();
-        $detail = $this->errorDetail($response);
-
-        if ($status === 408 || $status === 429 || $status >= 500) {
-            return new SquareUnavailableException("Square {$path} failed with {$status}: {$detail}");
+        if ($status === self::REQUEST_TIMEOUT_STATUS
+            || $status === self::TOO_MANY_REQUESTS_STATUS
+            || $status >= self::SERVER_ERROR_STATUS) {
+            return new SquareUnavailableException("Square {$operation} failed with {$status}: {$detail}");
         }
 
-        return new SquareRejectedException("Square {$path} rejected the request ({$status}): {$detail}");
+        return new SquareRejectedException("Square {$operation} rejected the request ({$status}): {$detail}");
     }
 
     /** Square's error detail, which carries its error code but never credentials. */
-    private function errorDetail(Response $response): string
+    private function errorDetail(SquareSdkApiException $exception): string
     {
-        $body = $response->json();
-        $errors = is_array($body) ? Json::objects($body, 'errors') : [];
+        $errors = $exception->getErrors();
 
         if ($errors === []) {
             return 'no detail';
         }
 
-        $code = Json::string($errors[0], 'code', 'UNKNOWN');
-        $detail = Json::string($errors[0], 'detail');
+        $first = $errors[0]->jsonSerialize();
+        $code = Json::string($first, 'code', 'UNKNOWN');
+        $detail = Json::string($first, 'detail');
 
         return trim("{$code} {$detail}");
     }

@@ -9,7 +9,7 @@ use App\Models\Modifier;
 use App\Models\ModifierList;
 use App\Models\Product;
 use App\Models\ProductVariation;
-use App\Square\SquareClient;
+use App\Square\SquareGateway;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
@@ -22,7 +22,7 @@ use Illuminate\Support\Str;
  */
 class PushSquareCatalog
 {
-    public function __construct(private readonly SquareClient $square) {}
+    public function __construct(private readonly SquareGateway $square) {}
 
     public function handle(): PushResult
     {
@@ -56,7 +56,7 @@ class PushSquareCatalog
      */
     private function categories(Collection $products): array
     {
-        return $products
+        return array_values($products
             ->pluck('category')
             ->filter()
             ->unique(fn (ProductCategory $category): string => $category->value)
@@ -69,7 +69,7 @@ class PushSquareCatalog
                     'name' => Str::headline($category->value),
                 ],
             ])
-            ->all();
+            ->all());
     }
 
     /**
@@ -78,7 +78,7 @@ class PushSquareCatalog
      */
     private function modifierLists(Collection $products): array
     {
-        return $products
+        return array_values($products
             ->flatMap(fn (Product $product) => $product->modifierLists)
             ->filter(fn (ModifierList $list): bool => $this->isLocalSquareId($list->square_modifier_list_id))
             ->unique('id')
@@ -99,7 +99,7 @@ class PushSquareCatalog
                         ->all(),
                 ],
             ])
-            ->all();
+            ->all());
     }
 
     /**
@@ -108,7 +108,7 @@ class PushSquareCatalog
      */
     private function items(Collection $products): array
     {
-        return $products
+        return array_values($products
             ->map(fn (Product $product): array => [
                 'type' => 'ITEM',
                 'id' => $this->itemId($product),
@@ -132,7 +132,7 @@ class PushSquareCatalog
                         ->all(),
                 ], fn (mixed $value): bool => $value !== null && $value !== [] && $value !== ''),
             ])
-            ->all();
+            ->all());
     }
 
     /**

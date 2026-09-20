@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\Square\HandleSquareWebhook;
-use App\Square\SquareClient;
 use App\Square\SquareException;
+use App\Square\SquareGateway;
 use App\Square\SquareNotConfiguredException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -22,7 +22,7 @@ class SquareWebhookController extends Controller
      * retrying answer 5xx. A bad signature or an unparseable body is not
      * worth retrying.
      */
-    public function __invoke(Request $request, SquareClient $square, HandleSquareWebhook $handle): Response
+    public function __invoke(Request $request, SquareGateway $square, HandleSquareWebhook $handle): Response
     {
         $body = $request->getContent();
         $signature = (string) $request->header('x-square-hmacsha256-signature', '');

@@ -6,8 +6,8 @@ namespace App\Actions\Checkout;
 
 use App\Cart\PricedCart;
 use App\Square\Data\OrderLine;
-use App\Square\SquareClient;
 use App\Square\SquareException;
+use App\Square\SquareGateway;
 use App\Support\Money;
 
 /**
@@ -22,7 +22,7 @@ class PreviewCheckoutPricing
     /**
      * @return array<string, mixed>|null
      */
-    public function handle(PricedCart $cart, SquareClient $square): ?array
+    public function handle(PricedCart $cart, SquareGateway $square): ?array
     {
         if ($cart->isEmpty() || ! $cart->isValid() || ! $square->isConfigured()) {
             return null;

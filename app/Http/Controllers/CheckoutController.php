@@ -12,7 +12,7 @@ use App\Actions\Checkout\PreviewCheckoutPricing;
 use App\Actions\Checkout\SendOrderReceipt;
 use App\Cart\CartSession;
 use App\Http\Requests\CheckoutRequest;
-use App\Square\SquareClient;
+use App\Square\SquareGateway;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -24,7 +24,7 @@ class CheckoutController extends Controller
         PriceCart $priceCart,
         PreviewCheckoutPricing $previewPricing,
         CartSession $cart,
-        SquareClient $square,
+        SquareGateway $square,
     ): Response {
         $priced = $priceCart->handle($cart);
 

@@ -11,6 +11,7 @@ use App\Square\Data\CatalogSnapshot;
 use App\Square\Data\CatalogVariation;
 use App\Square\Data\ItemModifierListRef;
 use App\Square\Data\LivePrice;
+use Square\Types\CatalogObject;
 
 /**
  * Turns Square's catalog JSON into typed values. Pure functions over decoded
@@ -53,6 +54,14 @@ final readonly class CatalogMapper
         }
 
         return new CatalogSnapshot($items, $modifierLists);
+    }
+
+    /**
+     * @param  iterable<CatalogObject>  $objects
+     */
+    public function snapshotFromCatalogObjects(iterable $objects): CatalogSnapshot
+    {
+        return $this->snapshot($this->catalogObjectsToArrays($objects));
     }
 
     /**
@@ -324,6 +333,34 @@ final readonly class CatalogMapper
         }
 
         return [$variations, $modifiers];
+    }
+
+    /**
+     * @param  iterable<CatalogObject>  $objects
+     * @param  iterable<CatalogObject>  $relatedObjects
+     * @return array{array<string, LivePrice>, array<string, LivePrice>}
+     */
+    public function livePricesFromCatalogObjects(iterable $objects, iterable $relatedObjects): array
+    {
+        return $this->livePrices(
+            $this->catalogObjectsToArrays($objects),
+            $this->catalogObjectsToArrays($relatedObjects),
+        );
+    }
+
+    /**
+     * @param  iterable<CatalogObject>  $objects
+     * @return list<array<string, mixed>>
+     */
+    private function catalogObjectsToArrays(iterable $objects): array
+    {
+        $arrays = [];
+
+        foreach ($objects as $object) {
+            $arrays[] = $object->jsonSerialize();
+        }
+
+        return $arrays;
     }
 
     /**
