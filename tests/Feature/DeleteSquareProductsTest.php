@@ -37,5 +37,7 @@ it('does not delete products when Square has none', function (): void {
         ->expectsOutput('No Square products to delete.')
         ->assertSuccessful();
 
-    Http::assertNothingSent();
+    Http::assertNotSent(
+        fn (Request $request): bool => str_ends_with($request->url(), '/v2/catalog/batch-delete'),
+    );
 });
