@@ -10,7 +10,9 @@ use App\Models\ModifierList;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Notifications\OrderReceipt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
 use Tests\Support\FakeSquare;
 
@@ -95,6 +97,8 @@ function checkoutPayload(array $overrides = []): array
 }
 
 it('lets a guest check out without an account', function (): void {
+    Notification::fake();
+
     $product = checkoutReadyCart();
     fakeSquareFor($product);
 
@@ -109,7 +113,10 @@ it('lets a guest check out without an account', function (): void {
         ->and($order->customer_email)->toBe('jaired@example.com')
         ->and($order->square_order_id)->toBe('SQ_ORDER_1')
         ->and($order->square_payment_id)->toBe('SQ_PAY_1')
+        ->and($order->receipt_sent_at)->not->toBeNull()
         ->and($order->items)->toHaveCount(1);
+
+    Notification::assertSentOnDemand(OrderReceipt::class);
 });
 
 it('attaches the order to a signed-in customer', function (): void {

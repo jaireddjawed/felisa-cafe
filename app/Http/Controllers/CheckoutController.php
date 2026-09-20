@@ -9,6 +9,7 @@ use App\Actions\Checkout\CheckoutException;
 use App\Actions\Checkout\CreateCheckout;
 use App\Actions\Checkout\PayOrder;
 use App\Actions\Checkout\PreviewCheckoutPricing;
+use App\Actions\Checkout\SendOrderReceipt;
 use App\Cart\CartSession;
 use App\Http\Requests\CheckoutRequest;
 use App\Square\SquareClient;
@@ -59,6 +60,7 @@ class CheckoutController extends Controller
         CheckoutRequest $request,
         CreateCheckout $createCheckout,
         PayOrder $payOrder,
+        SendOrderReceipt $sendReceipt,
         CartSession $cart,
     ): RedirectResponse {
         try {
@@ -79,6 +81,8 @@ class CheckoutController extends Controller
         } catch (CheckoutException $exception) {
             throw ValidationException::withMessages(['checkout' => $exception->getMessage()]);
         }
+
+        $sendReceipt->handle($order);
 
         // The order snapshot now holds what the cart held.
         $cart->clear();

@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $square_payment_id
  * @property CarbonImmutable|null $estimated_ready_at
  * @property CarbonImmutable|null $paid_at
+ * @property CarbonImmutable|null $receipt_sent_at
  * @property CarbonImmutable|null $completed_at
  * @property CarbonImmutable|null $last_synced_at
  * @property CarbonImmutable|null $created_at
@@ -63,6 +64,7 @@ class Order extends Model
             'square_order_version' => 'integer',
             'estimated_ready_at' => 'datetime',
             'paid_at' => 'datetime',
+            'receipt_sent_at' => 'datetime',
             'completed_at' => 'datetime',
             'last_synced_at' => 'datetime',
         ];
