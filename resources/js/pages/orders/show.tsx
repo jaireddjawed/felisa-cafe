@@ -62,8 +62,7 @@ export default function OrderShow({ order }: Props) {
                             {readyTime ?? 'We are working it out.'}
                         </p>
                         <p className="font-hand text-lav-600 mt-3 text-xl">
-                            We will have it waiting for you at the Felisa bar,{' '}
-                            {order.customerName}.
+                            Thanks {' '} {order.customerName}!
                         </p>
                     </section>
                 )}
