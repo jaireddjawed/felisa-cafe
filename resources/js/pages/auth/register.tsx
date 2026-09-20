@@ -15,15 +15,11 @@ export default function Register({ passwordRules }: Props) {
             <h1 className="font-marker text-lav-800 text-3xl">
                 Make an account
             </h1>
-            <p className="font-hand text-lav-600 mt-2 text-xl">
-                Optional — you can order without one. An account just keeps your
-                history.
-            </p>
 
             <Form
                 action={store()}
                 className="mt-6 grid gap-4"
-                resetOnSuccess={['password', 'password_confirmation']}
+                resetOnSuccess={['password']}
             >
                 {({ processing, errors }) => (
                     <>
@@ -56,16 +52,6 @@ export default function Register({ passwordRules }: Props) {
                             passwordrules={passwordRules}
                             placeholder="••••••••"
                             error={errors.password}
-                        />
-
-                        <Field
-                            label="Confirm password"
-                            name="password_confirmation"
-                            type="password"
-                            required
-                            autoComplete="new-password"
-                            placeholder="••••••••"
-                            error={errors.password_confirmation}
                         />
 
                         <button

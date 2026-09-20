@@ -13,7 +13,6 @@ test('a customer can create an account', function () {
         'name' => 'Jaired',
         'email' => 'jaired@example.com',
         'password' => 'password',
-        'password_confirmation' => 'password',
     ]);
 
     $this->assertAuthenticated();
@@ -29,7 +28,6 @@ test('an account cannot reuse an email address', function () {
         'name' => 'Someone Else',
         'email' => 'jaired@example.com',
         'password' => 'password',
-        'password_confirmation' => 'password',
     ])->assertSessionHasErrors('email');
 
     expect(User::query()->where('email', 'jaired@example.com')->count())->toBe(1);
