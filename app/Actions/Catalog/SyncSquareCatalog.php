@@ -6,12 +6,11 @@ namespace App\Actions\Catalog;
 
 use App\Enums\CatalogStatus;
 use App\Enums\ProductCategory;
-use App\Models\Modifier;
 use App\Models\ModifierList;
 use App\Models\Product;
 use App\Square\Data\CatalogItem;
 use App\Square\Data\CatalogModifierList;
-use App\Square\SquareClient;
+use App\Square\SquareGateway;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -35,7 +34,7 @@ use Illuminate\Support\Str;
  */
 class SyncSquareCatalog
 {
-    public function __construct(private readonly SquareClient $square) {}
+    public function __construct(private readonly SquareGateway $square) {}
 
     public function handle(): SyncResult
     {

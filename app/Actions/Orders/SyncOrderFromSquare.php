@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Actions\Orders;
 
 use App\Models\Order;
-use App\Square\SquareClient;
 use App\Square\SquareException;
+use App\Square\SquareGateway;
 
 /**
  * Re-reads an order from Square and folds the result into the local record.
@@ -19,7 +19,7 @@ use App\Square\SquareException;
 class SyncOrderFromSquare
 {
     public function __construct(
-        private readonly SquareClient $square,
+        private readonly SquareGateway $square,
         private readonly ApplySquareOrderState $applyState,
     ) {}
 

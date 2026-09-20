@@ -8,7 +8,7 @@ use App\Actions\Orders\ApplySquareOrderState;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Square\Data\CustomerContact;
-use App\Square\SquareClient;
+use App\Square\SquareGateway;
 use App\Square\SquareRejectedException;
 use App\Square\SquareUnavailableException;
 
@@ -29,7 +29,7 @@ class PayOrder
     private const TIP_FLOOR_CENTS = 10_000;
 
     public function __construct(
-        private readonly SquareClient $square,
+        private readonly SquareGateway $square,
         private readonly ApplySquareOrderState $applyState,
     ) {}
 

@@ -2,7 +2,8 @@
 
 namespace App\Providers;
 
-use App\Square\SquareClient;
+use App\Square\SquareGateway;
+use App\Square\SquareSdkGateway;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(SquareClient::class, fn (): SquareClient => new SquareClient(
+        $this->app->singleton(SquareGateway::class, fn (): SquareGateway => new SquareSdkGateway(
             accessToken: $this->stringConfig('square.access_token'),
             locationId: $this->stringConfig('square.location_id') ?? '',
             environment: $this->stringConfig('square.environment') ?? 'sandbox',

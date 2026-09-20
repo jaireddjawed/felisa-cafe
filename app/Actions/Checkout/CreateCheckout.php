@@ -14,7 +14,7 @@ use App\Models\Modifier;
 use App\Models\Order;
 use App\Square\Data\CustomerContact;
 use App\Square\Data\OrderLine;
-use App\Square\SquareClient;
+use App\Square\SquareGateway;
 use App\Square\SquareRejectedException;
 use App\Square\SquareUnavailableException;
 use Illuminate\Support\Facades\DB;
@@ -41,7 +41,7 @@ use Illuminate\Support\Facades\DB;
 class CreateCheckout
 {
     public function __construct(
-        private readonly SquareClient $square,
+        private readonly SquareGateway $square,
         private readonly PriceCart $priceCart,
         private readonly CalculateOrderEta $eta,
     ) {}

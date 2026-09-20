@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use App\Square\SquareGateway;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
@@ -20,6 +21,8 @@ final class FakeSquare
 {
     public const HOST = 'connect.squareupsandbox.com';
 
+    public static ?FakeSquareClient $client = null;
+
     /**
      * Fakes the whole Square API from a map of URL pattern to response.
      *
@@ -34,6 +37,13 @@ final class FakeSquare
     {
         Http::swap(new Factory(app(Dispatcher::class)));
         Http::preventStrayRequests();
+
+        self::$client = new FakeSquareClient(
+            routes: $routes,
+            locationId: (string) config('square.location_id', 'TEST_LOCATION'),
+            currency: (string) config('square.currency', 'USD'),
+        );
+        app()->instance(SquareGateway::class, self::$client);
 
         $prefixed = [];
 

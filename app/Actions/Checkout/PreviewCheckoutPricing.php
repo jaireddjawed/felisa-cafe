@@ -6,8 +6,8 @@ namespace App\Actions\Checkout;
 
 use App\Cart\PricedCart;
 use App\Square\Data\OrderLine;
-use App\Square\SquareClient;
 use App\Square\SquareException;
+use App\Square\SquareGateway;
 use App\Support\Money;
 
 /**
@@ -22,7 +22,7 @@ class PreviewCheckoutPricing
     /**
      * @return array<string, mixed>|null
      */
-    public function handle(PricedCart $cart, SquareClient $square): ?array
+    public function handle(PricedCart $cart, SquareGateway $square): ?array
     {
         if ($cart->isEmpty() || ! $cart->isValid() || ! $square->isConfigured()) {
             return null;
@@ -48,9 +48,9 @@ class PreviewCheckoutPricing
      */
     private function lines(PricedCart $cart): array
     {
-        return array_values(array_map(
+        return array_map(
             fn ($line): OrderLine => new OrderLine(
-                squareVariationId: $line->variation?->square_variation_id ?? '',
+                squareVariationId: $line->variation->square_variation_id,
                 quantity: $line->quantity,
                 squareModifierIds: array_map(
                     fn ($modifier): string => $modifier->square_modifier_id,
@@ -59,7 +59,7 @@ class PreviewCheckoutPricing
                 note: $line->note,
             ),
             $cart->lines,
-        ));
+        );
     }
 
     private function idempotencyKey(PricedCart $cart): string

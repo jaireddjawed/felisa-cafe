@@ -70,6 +70,7 @@ export default function Checkout({
     const form = useForm({
         name: auth.user?.name ?? '',
         email: auth.user?.email ?? '',
+        phone: '',
         notes: '',
         source_id: '',
         tip_cents: 0,
@@ -234,7 +235,7 @@ export default function Checkout({
                                         {line.total.formatted}
                                     </p>
                                 </div>
-                                <p className="font-hand text-lav-600 mt-0.5 text-base break-words">
+                                <p className="font-hand text-lav-600 mt-0.5 text-base wrap-break-word">
                                     {[
                                         line.variationName,
                                         ...line.modifiers.map(
@@ -335,6 +336,26 @@ export default function Checkout({
                             {form.errors.email && (
                                 <span className="font-hand text-base text-rose-700">
                                     {form.errors.email}
+                                </span>
+                            )}
+                        </label>
+
+                        <label className="font-hand text-lav-700 grid gap-1 text-xl">
+                            Phone
+                            <input
+                                type="tel"
+                                value={form.data.phone}
+                                onChange={(event) =>
+                                    form.setData('phone', event.target.value)
+                                }
+                                required
+                                autoComplete="tel"
+                                placeholder="+31 6 12345678"
+                                className={fieldClasses}
+                            />
+                            {form.errors.phone && (
+                                <span className="font-hand text-base text-rose-700">
+                                    {form.errors.phone}
                                 </span>
                             )}
                         </label>
