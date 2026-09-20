@@ -52,7 +52,7 @@ export default function SiteFooter({ shop }: Props) {
                             Our story
                         </Link>
                         <a
-                            href="https://instagram.com/felisacafe"
+                            href="https://www.instagram.com/felisacafe_/"
                             className="hover:text-white"
                         >
                             {shop.instagram}
