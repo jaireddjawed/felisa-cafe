@@ -34,6 +34,12 @@ interface SquareGateway
     public function batchUpsertCatalogObjects(string $idempotencyKey, array $objects): void;
 
     /**
+     * @param  list<string>  $itemIds
+     * @return list<string> all deleted object IDs, including child variations
+     */
+    public function deleteCatalogItems(array $itemIds): array;
+
+    /**
      * @param  list<OrderLine>  $lines
      */
     public function calculateOrder(string $idempotencyKey, array $lines): OrderPricing;

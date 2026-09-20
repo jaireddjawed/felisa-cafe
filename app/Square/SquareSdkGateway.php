@@ -12,7 +12,9 @@ use App\Square\Data\OrderPricing;
 use App\Square\Data\OrderState;
 use App\Square\Data\PaymentResult;
 use Carbon\CarbonImmutable;
+use GuzzleHttp\Client as GuzzleClient;
 use LogicException;
+use Square\Catalog\Requests\BatchDeleteCatalogObjectsRequest;
 use Square\Catalog\Requests\BatchGetCatalogObjectsRequest;
 use Square\Catalog\Requests\BatchUpsertCatalogObjectsRequest;
 use Square\Catalog\Requests\ListCatalogRequest;
@@ -40,6 +42,8 @@ use Throwable;
  */
 final class SquareSdkGateway implements SquareGateway
 {
+    private const DELETE_BATCH_SIZE = 200;
+
     private const REQUEST_TIMEOUT_STATUS = 408;
 
     private const TOO_MANY_REQUESTS_STATUS = 429;
@@ -69,7 +73,7 @@ final class SquareSdkGateway implements SquareGateway
             version: $this->apiVersion,
             options: [
                 'baseUrl' => (string) config("square.hosts.{$this->environment}"),
-                'timeout' => $this->timeoutSeconds,
+                'client' => new GuzzleClient(['timeout' => $this->timeoutSeconds]),
                 'maxRetries' => 2,
             ],
         );
@@ -167,6 +171,28 @@ final class SquareSdkGateway implements SquareGateway
             ])),
             'catalog.batchUpsert',
         );
+    }
+
+    /**
+     * @param  list<string>  $itemIds
+     * @return list<string>
+     */
+    public function deleteCatalogItems(array $itemIds): array
+    {
+        $deletedIds = [];
+
+        foreach (array_chunk($itemIds, self::DELETE_BATCH_SIZE) as $itemIdBatch) {
+            $response = $this->send(
+                fn (): mixed => $this->squareClient->catalog->batchDelete(
+                    new BatchDeleteCatalogObjectsRequest(['objectIds' => $itemIdBatch]),
+                ),
+                'catalog.batchDelete',
+            );
+
+            $deletedIds = [...$deletedIds, ...($response->getDeletedObjectIds() ?? [])];
+        }
+
+        return array_values(array_unique($deletedIds));
     }
 
     // -----------------------------------------------------------------------
