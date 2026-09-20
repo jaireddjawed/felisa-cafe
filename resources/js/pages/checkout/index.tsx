@@ -235,7 +235,7 @@ export default function Checkout({
                                         {line.total.formatted}
                                     </p>
                                 </div>
-                                <p className="font-hand text-lav-600 mt-0.5 text-base break-words">
+                                <p className="font-hand text-lav-600 mt-0.5 text-base wrap-break-word">
                                     {[
                                         line.variationName,
                                         ...line.modifiers.map(
