@@ -29,13 +29,18 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Stop default Ubuntu PostgreSQL service
+        run: |
+          sudo systemctl stop postgresql.service || true
+          sudo systemctl disable postgresql.service || true
+
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: mbstring, pdo_pgsql, pgsql, bcmath, zip, intl, opcache
           tools: composer:v2
           coverage: none
@@ -46,7 +51,7 @@ jobs:
           node-version: '22'
 
       - name: Create testing database
-        run: psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE felisa_cafe_testing;' || true
+        run: php -r "new PDO('pgsql:host=127.0.0.1;port=5432;dbname=postgres', 'postgres', '')->exec('CREATE DATABASE felisa_cafe_testing');" || true
 
       - name: Setup Application
         run: composer setup

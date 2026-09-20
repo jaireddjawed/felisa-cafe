@@ -37,7 +37,7 @@ RUN composer dump-autoload --optimize --no-dev
 # ==========================================
 # 3. Final Production Stage with FrankenPHP
 # ==========================================
-FROM dunglas/frankenphp:1-php8.3-bookworm AS runner
+FROM dunglas/frankenphp:1-php8.4-bookworm AS runner
 
 # Install essential PHP extensions for Laravel + Postgres + Redis
 RUN install-php-extensions \
