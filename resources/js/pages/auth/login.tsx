@@ -15,9 +15,6 @@ export default function Login({ status, canResetPassword }: Props) {
             <Head title="Log in" />
 
             <h1 className="font-marker text-lav-800 text-3xl">Welcome back</h1>
-            <p className="font-hand text-lav-600 mt-2 text-xl">
-                Sign in to see your order history.
-            </p>
 
             {status && (
                 <p className="bg-lav-200 font-hand text-lav-800 mt-4 rounded-2xl px-4 py-2 text-lg">
