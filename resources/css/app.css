@@ -103,13 +103,26 @@ body {
     animation: bob 6s ease-in-out infinite;
 }
 
-/* Form controls inherit the handwritten type rather than the browser's. */
-input,
-textarea,
-button,
-select {
-    font: inherit;
-    color: inherit;
+@layer base {
+    /* Form controls inherit the handwritten type rather than the browser's. */
+    input,
+    textarea,
+    button,
+    select {
+        font: inherit;
+        color: inherit;
+    }
+
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']),
+    summary {
+        cursor: pointer;
+    }
+
+    button:disabled,
+    [aria-disabled='true'] {
+        cursor: not-allowed;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
