@@ -43,7 +43,7 @@ class PushSquareCatalog
         ];
 
         $this->square->batchUpsertCatalogObjects(
-            idempotencyKey: 'catalog-push-'.hash('sha256', json_encode($objects, JSON_THROW_ON_ERROR)),
+            idempotencyKey: 'catalog-push-'.Str::uuid(),
             objects: $objects,
         );
 
