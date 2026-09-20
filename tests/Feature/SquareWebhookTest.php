@@ -60,7 +60,7 @@ it('rejects a webhook with a bad signature', function (): void {
 });
 
 it('rejects a webhook with no signature at all', function (): void {
-    $this->postJson(route('webhooks.square'), paymentEvent('evt_1'))
+    $this->withMiddleware()->postJson(route('webhooks.square'), paymentEvent('evt_1'))
         ->assertUnauthorized();
 });
 
