@@ -57,7 +57,6 @@ class PayOrder
                 customer: new CustomerContact(
                     $order->customer_name,
                     $order->customer_email,
-                    $order->customer_phone,
                 ),
             );
         } catch (SquareRejectedException $exception) {

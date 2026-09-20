@@ -22,7 +22,6 @@ class CheckoutRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:191'],
             'email' => ['required', 'email', 'max:191'],
-            'phone' => ['required', 'string', 'max:32'],
             'notes' => ['nullable', 'string', 'max:500'],
             // Generated once per checkout attempt in the browser and reused on
             // retry, so a resubmitted form resumes one order rather than
@@ -40,7 +39,6 @@ class CheckoutRequest extends FormRequest
         return new CustomerContact(
             name: trim($this->string('name')->toString()),
             email: trim($this->string('email')->toString()),
-            phone: trim($this->string('phone')->toString()),
         );
     }
 
