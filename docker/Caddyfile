@@ -1,0 +1,20 @@
+{
+    admin off
+    auto_https off
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}
+
+:{$PORT:8080} {
+    root * /app/public
+    encode zstd gzip
+
+    # Execute PHP files via FrankenPHP
+    php_server
+
+    # Fallback to index.php for client-side routing
+    try_files {path} {path}/ /index.php?{query}
+}
