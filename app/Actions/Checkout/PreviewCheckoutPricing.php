@@ -48,9 +48,9 @@ class PreviewCheckoutPricing
      */
     private function lines(PricedCart $cart): array
     {
-        return array_values(array_map(
+        return array_map(
             fn ($line): OrderLine => new OrderLine(
-                squareVariationId: $line->variation?->square_variation_id ?? '',
+                squareVariationId: $line->variation->square_variation_id,
                 quantity: $line->quantity,
                 squareModifierIds: array_map(
                     fn ($modifier): string => $modifier->square_modifier_id,
@@ -59,7 +59,7 @@ class PreviewCheckoutPricing
                 note: $line->note,
             ),
             $cart->lines,
-        ));
+        );
     }
 
     private function idempotencyKey(PricedCart $cart): string
