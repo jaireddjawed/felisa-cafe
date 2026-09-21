@@ -41,6 +41,12 @@ type SquareCardState = {
     cardReady: boolean;
     applePayReady: boolean;
     googlePayReady: boolean;
+    /**
+     * True once wallet detection has finished at least once, whether or not
+     * any wallet turned out to be available. It stays true while the wallets
+     * re-attach for a new total, so a placeholder does not flicker on every tip.
+     */
+    walletsSettled: boolean;
     error: string | null;
     tokenizeCard: () => Promise<string>;
     tokenizeApplePay: () => Promise<string>;
@@ -98,6 +104,7 @@ export function useSquareCard({
     const [cardReady, setCardReady] = useState(false);
     const [applePayReady, setApplePayReady] = useState(false);
     const [googlePayReady, setGooglePayReady] = useState(false);
+    const [walletsSettled, setWalletsSettled] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -160,6 +167,7 @@ export function useSquareCard({
             setCardReady(false);
             setApplePayReady(false);
             setGooglePayReady(false);
+            setWalletsSettled(false);
         };
     }, [applicationId, cardSelector, enabled, locationId, sdkUrl]);
 
@@ -211,7 +219,11 @@ export function useSquareCard({
             }
         };
 
-        void attachWallets();
+        void attachWallets().finally(() => {
+            if (!cancelled) {
+                setWalletsSettled(true);
+            }
+        });
 
         return () => {
             cancelled = true;
@@ -318,6 +330,7 @@ export function useSquareCard({
         cardReady,
         applePayReady,
         googlePayReady,
+        walletsSettled,
         error,
         tokenizeCard,
         tokenizeApplePay,
