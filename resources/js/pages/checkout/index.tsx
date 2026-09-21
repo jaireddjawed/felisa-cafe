@@ -1,5 +1,5 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { CatFace, Sparkle, SquiggleRule } from '@/components/doodles';
 import { useSquareCard } from '@/hooks/use-square-card';
 import { menu } from '@/routes';
@@ -87,6 +87,13 @@ export default function Checkout({
     );
     const [cardError, setCardError] = useState<string | null>(null);
 
+    // Tokenizing is async and happens before the request starts, so
+    // `form.processing` alone leaves a window where a second click could
+    // start another payment. The ref closes that window synchronously.
+    const submitting = useRef(false);
+    const [tokenizing, setTokenizing] = useState(false);
+    const locked = form.processing || tokenizing;
+
     const currency = pricingPreview?.total.currency ?? cart.subtotal.currency;
 
     const tipOptions = useMemo(
@@ -125,11 +132,19 @@ export default function Checkout({
     });
 
     async function pay(tokenize: () => Promise<string>) {
-        if (form.processing || !cart.valid) {
+        if (submitting.current || form.processing || !cart.valid) {
             return;
         }
 
+        submitting.current = true;
+        setTokenizing(true);
         setCardError(null);
+
+        // Unlock once the attempt settles, so a declined card can be retried.
+        const unlock = () => {
+            submitting.current = false;
+            setTokenizing(false);
+        };
 
         try {
             const token = await tokenize();
@@ -139,8 +154,9 @@ export default function Checkout({
                 source_id: token,
                 tip_cents: tipCents,
             }));
-            form.post(store().url, { preserveScroll: true });
+            form.post(store().url, { preserveScroll: true, onFinish: unlock });
         } catch (caught) {
+            unlock();
             setCardError(
                 caught instanceof Error
                     ? caught.message
@@ -277,292 +293,307 @@ export default function Checkout({
                     </div>
                 </section>
 
-                {/* ── 2. Contact details ─────────────────────────────────── */}
-                <section className="sticker bg-lav-100 w-full max-w-full rounded-3xl p-5 sm:p-6">
-                    <div className="border-lav-300 flex items-center justify-between border-b-2 border-dashed pb-3">
-                        <h2 className="font-marker text-lav-800 text-2xl">
-                            Contact details
-                        </h2>
-                        {auth.user && (
-                            <span className="bg-lav-200 font-hand text-lav-700 rounded-full px-3 py-1 text-sm">
-                                Signed in
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <label className="font-hand text-lav-700 grid gap-1 text-xl">
-                            Name
-                            <input
-                                value={form.data.name}
-                                onChange={(event) =>
-                                    form.setData('name', event.target.value)
-                                }
-                                required
-                                autoComplete="name"
-                                placeholder="Your name"
-                                className={fieldClasses}
-                            />
-                            {form.errors.name && (
-                                <span className="font-hand text-base text-rose-700">
-                                    {form.errors.name}
+                {/* Everything the customer can change is locked while paying.
+                    A fieldset disables native controls; pointer-events covers
+                    Square's iframes and the Google Pay button. */}
+                <fieldset
+                    disabled={locked}
+                    aria-busy={locked}
+                    className={`m-0 grid min-w-0 gap-6 border-0 p-0 ${
+                        locked ? 'pointer-events-none opacity-70' : ''
+                    }`}
+                >
+                    {/* ── 2. Contact details ─────────────────────────────────── */}
+                    <section className="sticker bg-lav-100 w-full max-w-full rounded-3xl p-5 sm:p-6">
+                        <div className="border-lav-300 flex items-center justify-between border-b-2 border-dashed pb-3">
+                            <h2 className="font-marker text-lav-800 text-2xl">
+                                Contact details
+                            </h2>
+                            {auth.user && (
+                                <span className="bg-lav-200 font-hand text-lav-700 rounded-full px-3 py-1 text-sm">
+                                    Signed in
                                 </span>
                             )}
-                        </label>
+                        </div>
 
-                        <label className="font-hand text-lav-700 grid gap-1 text-xl">
-                            Email
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                            <label className="font-hand text-lav-700 grid gap-1 text-xl">
+                                Name
+                                <input
+                                    value={form.data.name}
+                                    onChange={(event) =>
+                                        form.setData('name', event.target.value)
+                                    }
+                                    required
+                                    autoComplete="name"
+                                    placeholder="Your name"
+                                    className={fieldClasses}
+                                />
+                                {form.errors.name && (
+                                    <span className="font-hand text-base text-rose-700">
+                                        {form.errors.name}
+                                    </span>
+                                )}
+                            </label>
+
+                            <label className="font-hand text-lav-700 grid gap-1 text-xl">
+                                Email
+                                <input
+                                    type="email"
+                                    value={form.data.email}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'email',
+                                            event.target.value,
+                                        )
+                                    }
+                                    required
+                                    autoComplete="email"
+                                    placeholder="name@example.com"
+                                    className={fieldClasses}
+                                />
+                                {form.errors.email && (
+                                    <span className="font-hand text-base text-rose-700">
+                                        {form.errors.email}
+                                    </span>
+                                )}
+                            </label>
+                        </div>
+
+                        <label className="font-hand text-lav-700 mt-4 grid gap-1 text-xl">
+                            Anything we should know?
                             <input
-                                type="email"
-                                value={form.data.email}
+                                value={form.data.notes}
                                 onChange={(event) =>
-                                    form.setData('email', event.target.value)
+                                    form.setData('notes', event.target.value)
                                 }
-                                required
-                                autoComplete="email"
-                                placeholder="name@example.com"
+                                placeholder="Extra hot, light ice…"
                                 className={fieldClasses}
                             />
-                            {form.errors.email && (
-                                <span className="font-hand text-base text-rose-700">
-                                    {form.errors.email}
-                                </span>
-                            )}
                         </label>
-                    </div>
+                    </section>
 
-                    <label className="font-hand text-lav-700 mt-4 grid gap-1 text-xl">
-                        Anything we should know?
-                        <input
-                            value={form.data.notes}
-                            onChange={(event) =>
-                                form.setData('notes', event.target.value)
-                            }
-                            placeholder="Extra hot, light ice…"
-                            className={fieldClasses}
-                        />
-                    </label>
-                </section>
+                    {/* ── 3. Payment details ─────────────────────────────────── */}
+                    <section className="sticker bg-lav-100 w-full max-w-full rounded-3xl p-5 sm:p-6">
+                        <div className="border-lav-300 border-b-2 border-dashed pb-3">
+                            <h2 className="font-marker text-lav-800 text-2xl">
+                                Payment details
+                            </h2>
+                        </div>
 
-                {/* ── 3. Payment details ─────────────────────────────────── */}
-                <section className="sticker bg-lav-100 w-full max-w-full rounded-3xl p-5 sm:p-6">
-                    <div className="border-lav-300 border-b-2 border-dashed pb-3">
-                        <h2 className="font-marker text-lav-800 text-2xl">
-                            Payment details
-                        </h2>
-                    </div>
-
-                    <div className="mt-4 grid gap-5">
-                        {allowTipping && (
-                            <div>
-                                <h3 className="font-marker text-lav-800 text-xl">
-                                    Add a tip
-                                </h3>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    {tipOptions.map((option) => (
+                        <div className="mt-4 grid gap-5">
+                            {allowTipping && (
+                                <div>
+                                    <h3 className="font-marker text-lav-800 text-xl">
+                                        Add a tip
+                                    </h3>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {tipOptions.map((option) => (
+                                            <button
+                                                key={option.label}
+                                                type="button"
+                                                onClick={() => {
+                                                    setTipChoice(option.label);
+                                                    setTipCents(option.cents);
+                                                    setCustomTip('');
+                                                }}
+                                                className={`font-hand rounded-full border-2 px-4 py-2 text-lg transition ${
+                                                    tipChoice === option.label
+                                                        ? 'border-lav-700 bg-lav-600 text-white'
+                                                        : 'border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
                                         <button
-                                            key={option.label}
                                             type="button"
                                             onClick={() => {
-                                                setTipChoice(option.label);
-                                                setTipCents(option.cents);
-                                                setCustomTip('');
+                                                setTipChoice('Custom');
+                                                setTipCents(
+                                                    customTipCents(
+                                                        customTip,
+                                                        cart.subtotal.cents,
+                                                        customTipMode,
+                                                    ),
+                                                );
                                             }}
                                             className={`font-hand rounded-full border-2 px-4 py-2 text-lg transition ${
-                                                tipChoice === option.label
+                                                tipChoice === 'Custom'
                                                     ? 'border-lav-700 bg-lav-600 text-white'
                                                     : 'border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed'
                                             }`}
                                         >
-                                            {option.label}
+                                            Custom
                                         </button>
-                                    ))}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setTipChoice('Custom');
-                                            setTipCents(
-                                                customTipCents(
-                                                    customTip,
-                                                    cart.subtotal.cents,
-                                                    customTipMode,
-                                                ),
-                                            );
-                                        }}
-                                        className={`font-hand rounded-full border-2 px-4 py-2 text-lg transition ${
-                                            tipChoice === 'Custom'
-                                                ? 'border-lav-700 bg-lav-600 text-white'
-                                                : 'border-lav-400 text-lav-700 hover:bg-lav-300 border-dashed'
-                                        }`}
-                                    >
-                                        Custom
-                                    </button>
 
-                                    {tipChoice === 'Custom' && (
-                                        <div className="mt-3 grid w-full gap-2 sm:grid-cols-[auto_1fr]">
-                                            <div
-                                                className="border-lav-400 flex rounded-full border-2 bg-white p-1"
-                                                role="group"
-                                                aria-label="Custom tip type"
-                                            >
-                                                {[
-                                                    {
-                                                        label: '%',
-                                                        mode: 'percent' as const,
-                                                    },
-                                                    {
-                                                        label: '$',
-                                                        mode: 'dollars' as const,
-                                                    },
-                                                ].map((option) => (
-                                                    <button
-                                                        key={option.mode}
-                                                        type="button"
-                                                        aria-pressed={
-                                                            customTipMode ===
-                                                            option.mode
-                                                        }
-                                                        onClick={() => {
-                                                            setTipChoice(
-                                                                'Custom',
-                                                            );
-                                                            setCustomTipMode(
-                                                                option.mode,
-                                                            );
-                                                            setTipCents(
-                                                                customTipCents(
-                                                                    customTip,
-                                                                    cart
-                                                                        .subtotal
-                                                                        .cents,
+                                        {tipChoice === 'Custom' && (
+                                            <div className="mt-3 grid w-full gap-2 sm:grid-cols-[auto_1fr]">
+                                                <div
+                                                    className="border-lav-400 flex rounded-full border-2 bg-white p-1"
+                                                    role="group"
+                                                    aria-label="Custom tip type"
+                                                >
+                                                    {[
+                                                        {
+                                                            label: '%',
+                                                            mode: 'percent' as const,
+                                                        },
+                                                        {
+                                                            label: '$',
+                                                            mode: 'dollars' as const,
+                                                        },
+                                                    ].map((option) => (
+                                                        <button
+                                                            key={option.mode}
+                                                            type="button"
+                                                            aria-pressed={
+                                                                customTipMode ===
+                                                                option.mode
+                                                            }
+                                                            onClick={() => {
+                                                                setTipChoice(
+                                                                    'Custom',
+                                                                );
+                                                                setCustomTipMode(
                                                                     option.mode,
-                                                                ),
-                                                            );
-                                                        }}
-                                                        className={`font-hand grid size-10 place-items-center rounded-full text-lg transition ${
-                                                            customTipMode ===
-                                                            option.mode
-                                                                ? 'bg-lav-600 text-white'
-                                                                : 'text-lav-700 hover:bg-lav-200'
-                                                        }`}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <input
-                                                inputMode="decimal"
-                                                value={customTip}
-                                                onChange={(event) => {
-                                                    const value =
-                                                        event.target.value;
+                                                                );
+                                                                setTipCents(
+                                                                    customTipCents(
+                                                                        customTip,
+                                                                        cart
+                                                                            .subtotal
+                                                                            .cents,
+                                                                        option.mode,
+                                                                    ),
+                                                                );
+                                                            }}
+                                                            className={`font-hand grid size-10 place-items-center rounded-full text-lg transition ${
+                                                                customTipMode ===
+                                                                option.mode
+                                                                    ? 'bg-lav-600 text-white'
+                                                                    : 'text-lav-700 hover:bg-lav-200'
+                                                            }`}
+                                                        >
+                                                            {option.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <input
+                                                    inputMode="decimal"
+                                                    value={customTip}
+                                                    onChange={(event) => {
+                                                        const value =
+                                                            event.target.value;
 
-                                                    setCustomTip(value);
-                                                    setTipCents(
-                                                        customTipCents(
-                                                            value,
-                                                            cart.subtotal.cents,
-                                                            customTipMode,
-                                                        ),
-                                                    );
-                                                }}
-                                                aria-label={
-                                                    customTipMode === 'percent'
-                                                        ? 'Custom tip percentage'
-                                                        : 'Custom tip amount in dollars'
-                                                }
-                                                className="border-lav-300 font-hand text-lav-800 focus:border-lav-600 w-full rounded-full border-2 bg-white px-4 py-2 text-lg outline-none"
-                                            />
-                                        </div>
+                                                        setCustomTip(value);
+                                                        setTipCents(
+                                                            customTipCents(
+                                                                value,
+                                                                cart.subtotal
+                                                                    .cents,
+                                                                customTipMode,
+                                                            ),
+                                                        );
+                                                    }}
+                                                    aria-label={
+                                                        customTipMode ===
+                                                        'percent'
+                                                            ? 'Custom tip percentage'
+                                                            : 'Custom tip amount in dollars'
+                                                    }
+                                                    className="border-lav-300 font-hand text-lav-800 focus:border-lav-600 w-full rounded-full border-2 bg-white px-4 py-2 text-lg outline-none"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div
+                                className={
+                                    paymentMethods.applePayReady ||
+                                    paymentMethods.googlePayReady
+                                        ? ''
+                                        : 'pointer-events-none absolute top-0 -left-[100vw] w-full opacity-0'
+                                }
+                            >
+                                <div className="grid w-full gap-3">
+                                    {paymentMethods.applePayReady && (
+                                        <button
+                                            type="button"
+                                            aria-label={`Pay ${paymentTotal} with Apple Pay`}
+                                            onClick={() =>
+                                                pay(
+                                                    paymentMethods.tokenizeApplePay,
+                                                )
+                                            }
+                                            disabled={locked || !cart.valid}
+                                            className="apple-pay-button wallet-pay-button h-12 rounded-xl disabled:opacity-40"
+                                        />
                                     )}
+                                    <div
+                                        id={GOOGLE_PAY_CONTAINER_ID}
+                                        className={
+                                            paymentMethods.googlePayReady
+                                                ? 'wallet-pay-button min-h-12 w-full'
+                                                : 'wallet-pay-button h-12 w-full'
+                                        }
+                                        onClick={() =>
+                                            void pay(
+                                                paymentMethods.tokenizeGooglePay,
+                                            )
+                                        }
+                                    />
                                 </div>
                             </div>
-                        )}
 
-                        <div
-                            className={
-                                paymentMethods.applePayReady ||
-                                paymentMethods.googlePayReady
-                                    ? ''
-                                    : 'pointer-events-none absolute top-0 -left-[100vw] w-full opacity-0'
-                            }
-                        >
-                            <div className="grid w-full gap-3">
-                                {paymentMethods.applePayReady && (
-                                    <button
-                                        type="button"
-                                        aria-label={`Pay ${paymentTotal} with Apple Pay`}
-                                        onClick={() =>
-                                            pay(paymentMethods.tokenizeApplePay)
-                                        }
-                                        disabled={
-                                            form.processing || !cart.valid
-                                        }
-                                        className="apple-pay-button wallet-pay-button h-12 rounded-xl disabled:opacity-40"
-                                    />
-                                )}
+                            <div>
+                                <h3 className="font-marker text-lav-800 mb-2 text-xl">
+                                    Card
+                                </h3>
                                 <div
-                                    id={GOOGLE_PAY_CONTAINER_ID}
-                                    className={
-                                        paymentMethods.googlePayReady
-                                            ? 'wallet-pay-button min-h-12 w-full'
-                                            : 'wallet-pay-button h-12 w-full'
-                                    }
-                                    onClick={() =>
-                                        void pay(
-                                            paymentMethods.tokenizeGooglePay,
-                                        )
-                                    }
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <h3 className="font-marker text-lav-800 mb-2 text-xl">
-                                Card
-                            </h3>
-                            <div
-                                id={CARD_CONTAINER_ID}
-                                className="border-lav-200 min-h-[90px] rounded-2xl border-2 bg-white p-3"
-                            >
-                                {!square.configured && (
-                                    <p className="font-hand text-lav-500 py-6 text-center text-lg">
-                                        Card payments are not configured yet.
+                                    id={CARD_CONTAINER_ID}
+                                    className="border-lav-200 min-h-[90px] rounded-2xl border-2 bg-white p-3"
+                                >
+                                    {!square.configured && (
+                                        <p className="font-hand text-lav-500 py-6 text-center text-lg">
+                                            Card payments are not configured
+                                            yet.
+                                        </p>
+                                    )}
+                                </div>
+                                {paymentMethods.error && (
+                                    <p className="font-hand mt-2 text-base text-rose-700">
+                                        {paymentMethods.error}
                                     </p>
                                 )}
                             </div>
-                            {paymentMethods.error && (
-                                <p className="font-hand mt-2 text-base text-rose-700">
-                                    {paymentMethods.error}
+
+                            {(errors.checkout || cardError) && (
+                                <p
+                                    className="sticker font-hand rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 text-lg text-rose-800"
+                                    role="alert"
+                                >
+                                    {errors.checkout ?? cardError}
                                 </p>
                             )}
-                        </div>
 
-                        {(errors.checkout || cardError) && (
-                            <p
-                                className="sticker font-hand rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 text-lg text-rose-800"
-                                role="alert"
+                            <button
+                                type="button"
+                                onClick={() => pay(paymentMethods.tokenizeCard)}
+                                disabled={
+                                    locked ||
+                                    !paymentMethods.cardReady ||
+                                    !cart.valid
+                                }
+                                className="sticker bg-lav-600 font-marker hover:bg-lav-700 mt-2 w-full rounded-full py-3 text-lg text-white transition disabled:opacity-40"
                             >
-                                {errors.checkout ?? cardError}
-                            </p>
-                        )}
-
-                        <button
-                            type="button"
-                            onClick={() => pay(paymentMethods.tokenizeCard)}
-                            disabled={
-                                form.processing ||
-                                !paymentMethods.cardReady ||
-                                !cart.valid
-                            }
-                            className="sticker bg-lav-600 font-marker hover:bg-lav-700 mt-2 w-full rounded-full py-3 text-lg text-white transition disabled:opacity-40"
-                        >
-                            {form.processing
-                                ? 'Processing…'
-                                : `Pay ${paymentTotal}`}
-                        </button>
-                    </div>
-                </section>
+                                {locked ? 'Processing…' : `Pay ${paymentTotal}`}
+                            </button>
+                        </div>
+                    </section>
+                </fieldset>
             </div>
         </div>
     );
