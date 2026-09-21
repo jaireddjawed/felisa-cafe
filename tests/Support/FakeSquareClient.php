@@ -12,6 +12,7 @@ use App\Square\Data\OrderLine;
 use App\Square\Data\OrderPricing;
 use App\Square\Data\OrderState;
 use App\Square\Data\PaymentResult;
+use App\Square\Data\StoredCard;
 use App\Square\Json;
 use App\Square\SquareException;
 use App\Square\SquareGateway;
@@ -166,6 +167,8 @@ final class FakeSquareClient implements SquareGateway
         int $tipCents,
         string $sourceId,
         CustomerContact $customer,
+        ?string $customerId = null,
+        ?string $verificationToken = null,
     ): PaymentResult {
         $payload = [
             'source_id' => $sourceId,
@@ -184,6 +187,12 @@ final class FakeSquareClient implements SquareGateway
         if ($customer->email !== '') {
             $payload['buyer_email_address'] = $customer->email;
         }
+        if ($customerId !== null) {
+            $payload['customer_id'] = $customerId;
+        }
+        if ($verificationToken !== null) {
+            $payload['verification_token'] = $verificationToken;
+        }
 
         $body = $this->request('POST', '/v2/payments', $payload);
 
@@ -191,6 +200,61 @@ final class FakeSquareClient implements SquareGateway
             Json::string($body, 'payment.id'),
             $this->getOrder($squareOrderId),
         );
+    }
+
+    public function createCustomer(
+        string $idempotencyKey,
+        CustomerContact $customer,
+        string $referenceId,
+    ): string {
+        $body = $this->request('POST', '/v2/customers', array_filter([
+            'idempotency_key' => $idempotencyKey,
+            'given_name' => $customer->name,
+            'email_address' => $customer->email,
+            'reference_id' => $referenceId,
+        ], fn (string $value): bool => $value !== ''));
+
+        return Json::string($body, 'customer.id');
+    }
+
+    public function createCard(
+        string $idempotencyKey,
+        string $customerId,
+        string $sourceId,
+        CustomerContact $customer,
+        string $referenceId,
+        ?string $verificationToken = null,
+    ): StoredCard {
+        $payload = [
+            'idempotency_key' => $idempotencyKey,
+            'source_id' => $sourceId,
+            'card' => [
+                'customer_id' => $customerId,
+                'cardholder_name' => $customer->name,
+                'reference_id' => $referenceId,
+            ],
+        ];
+
+        if ($verificationToken !== null) {
+            $payload['verification_token'] = $verificationToken;
+        }
+
+        $card = Json::object($this->request('POST', '/v2/cards', $payload), 'card');
+
+        return new StoredCard(
+            squareCardId: Json::string($card, 'id'),
+            brand: Json::string($card, 'card_brand'),
+            last4: Json::string($card, 'last_4'),
+            expMonth: Json::int($card, 'exp_month'),
+            expYear: Json::int($card, 'exp_year'),
+            cardholderName: Json::string($card, 'cardholder_name'),
+            fingerprint: Json::nullableString($card, 'fingerprint'),
+        );
+    }
+
+    public function disableCard(string $squareCardId): void
+    {
+        $this->request('POST', "/v2/cards/{$squareCardId}/disable");
     }
 
     public function getOrder(string $squareOrderId): OrderState

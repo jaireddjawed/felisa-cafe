@@ -1,7 +1,7 @@
 import { Link, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import { CatFace } from '@/components/doodles';
-import { login, logout, orders } from '@/routes';
+import { login, logout, orders, settings } from '@/routes';
 import type { AuthUser } from '@/types';
 
 type Props = {
@@ -99,6 +99,15 @@ export default function AccountMenu({ user }: Props) {
                         className="font-hand text-lav-800 hover:bg-lav-200/80 block rounded-xl px-3 py-2 text-lg transition"
                     >
                         Order history
+                    </Link>
+
+                    <Link
+                        href={settings()}
+                        role="menuitem"
+                        onClick={() => setOpen(false)}
+                        className="font-hand text-lav-800 hover:bg-lav-200/80 block rounded-xl px-3 py-2 text-lg transition"
+                    >
+                        Settings
                     </Link>
 
                     <div className="border-lav-300 my-1 border-t-2 border-dashed" />

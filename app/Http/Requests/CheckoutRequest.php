@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\SavedCard;
 use App\Square\Data\CustomerContact;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 /**
  * Everything checkout accepts from the browser. Note what is absent: no
@@ -28,8 +31,21 @@ class CheckoutRequest extends FormRequest
             // creating a second.
             'idempotency_key' => ['required', 'string', 'min:16', 'max:191'],
             // A single-use card token from Square's Web Payments SDK. Card
-            // details never reach this application.
-            'source_id' => ['required', 'string', 'max:2048'],
+            // details never reach this application. Absent when paying with a
+            // card already on file.
+            'source_id' => ['required_without:saved_card_id', 'nullable', 'string', 'max:2048'],
+            // A card on file, which the scoped rule below proves belongs to
+            // the customer making the request. Guests match nothing.
+            'saved_card_id' => [
+                'nullable',
+                'integer',
+                // No account means no match, which is what a guest should get.
+                Rule::exists('saved_cards', 'id')->where('user_id', Auth::id() ?? 0),
+            ],
+            'save_card' => ['nullable', 'boolean'],
+            // Square's buyer verification result, when the browser produced
+            // one. It proves the buyer was challenged, and carries no card data.
+            'verification_token' => ['nullable', 'string', 'max:2048'],
             'tip_cents' => ['nullable', 'integer', 'min:0'],
         ];
     }
@@ -45,5 +61,31 @@ class CheckoutRequest extends FormRequest
     public function tipCents(): int
     {
         return $this->integer('tip_cents');
+    }
+
+    /** The card on file to charge, if the customer picked one of their own. */
+    public function savedCard(): ?SavedCard
+    {
+        $user = $this->user();
+        $savedCardId = $this->integer('saved_card_id');
+
+        if ($user === null || $savedCardId === 0) {
+            return null;
+        }
+
+        return $user->savedCards()->with('user')->find($savedCardId);
+    }
+
+    /** Only an account can keep a card; there is nothing to attach one to. */
+    public function shouldSaveCard(): bool
+    {
+        return $this->user() !== null && $this->boolean('save_card');
+    }
+
+    public function verificationToken(): ?string
+    {
+        $token = trim($this->string('verification_token')->toString());
+
+        return $token === '' ? null : $token;
     }
 }

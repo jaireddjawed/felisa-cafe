@@ -8,6 +8,7 @@
  *   Product          App\Models\Product::toMenuCard() / toMenuDetail()
  *   Cart, CartLine   App\Cart\PricedCart / PricedLine::toArray()
  *   Order            App\Http\Controllers\OrderController::payload()
+ *   SavedCard        App\Models\SavedCard::toPayload()
  *
  * Keeping them hand-written and in one file makes the boundary auditable:
  * change a payload in PHP and the matching type is one file away.
@@ -127,6 +128,21 @@ export interface Order {
     tip: Money;
     total: Money;
     items: OrderItem[];
+}
+
+/**
+ * A card the customer keeps on file. Only Square holds the card itself; `id`
+ * is this application's own row, and is all the browser ever sends back.
+ */
+export interface SavedCard {
+    id: number;
+    brand: string;
+    last4: string;
+    expMonth: number;
+    expYear: number;
+    expired: boolean;
+    addedAt: string | null;
+    lastUsedAt: string | null;
 }
 
 export interface Shop {

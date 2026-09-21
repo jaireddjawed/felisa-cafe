@@ -9,11 +9,14 @@ use App\Actions\Checkout\CheckoutException;
 use App\Actions\Checkout\CreateCheckout;
 use App\Actions\Checkout\PayOrder;
 use App\Actions\Checkout\PreviewCheckoutPricing;
+use App\Actions\Checkout\ResolvePaymentSource;
 use App\Actions\Checkout\SendOrderReceipt;
 use App\Cart\CartSession;
 use App\Http\Requests\CheckoutRequest;
+use App\Models\SavedCard;
 use App\Square\SquareGateway;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -21,12 +24,14 @@ use Inertia\Response;
 class CheckoutController extends Controller
 {
     public function show(
+        Request $request,
         PriceCart $priceCart,
         PreviewCheckoutPricing $previewPricing,
         CartSession $cart,
         SquareGateway $square,
     ): Response {
         $priced = $priceCart->handle($cart);
+        $user = $request->user();
 
         return Inertia::render('checkout/index', [
             'cart' => $priced->toArray(),
@@ -42,6 +47,12 @@ class CheckoutController extends Controller
                 'configured' => $square->isConfigured() && config('square.application_id') !== null,
             ],
             'allowTipping' => (bool) config('square.allow_tipping', true),
+            // Cards belong to an account, so guests see neither the list nor
+            // the offer to keep a card.
+            'savedCards' => $user === null ? [] : $user->savedCards
+                ->map(fn (SavedCard $card): array => $card->toPayload())
+                ->all(),
+            'canSaveCard' => $user !== null,
         ]);
     }
 
@@ -49,8 +60,9 @@ class CheckoutController extends Controller
      * Creates the order and charges it. Each step is its own Action, and the
      * order they run in is the whole checkout flow:
      *
-     *   CreateCheckout  cart → validated, priced, local order + Square order
-     *   PayOrder        card token → Square payment → verified order state
+     *   CreateCheckout        cart → validated, priced, local order + Square order
+     *   ResolvePaymentSource  card token or card on file → what to charge
+     *   PayOrder              source → Square payment → verified order state
      *
      * A card decline leaves the local order pending. The browser keeps its
      * idempotency key, so retrying resumes that same order instead of
@@ -59,6 +71,7 @@ class CheckoutController extends Controller
     public function store(
         CheckoutRequest $request,
         CreateCheckout $createCheckout,
+        ResolvePaymentSource $resolveSource,
         PayOrder $payOrder,
         SendOrderReceipt $sendReceipt,
         CartSession $cart,
@@ -72,9 +85,18 @@ class CheckoutController extends Controller
                 userId: $request->user()?->id,
             );
 
+            $source = $resolveSource->handle(
+                user: $request->user(),
+                savedCard: $request->savedCard(),
+                sourceId: $request->string('source_id')->toString(),
+                contact: $request->contact(),
+                saveCard: $request->shouldSaveCard(),
+                verificationToken: $request->verificationToken(),
+            );
+
             $order = $payOrder->handle(
                 order: $order,
-                sourceId: $request->string('source_id')->toString(),
+                source: $source,
                 idempotencyKey: $request->string('idempotency_key')->toString().'-payment',
                 tipCents: $request->tipCents(),
             );

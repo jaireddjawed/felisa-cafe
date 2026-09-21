@@ -2,9 +2,9 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useRef, useState } from 'react';
 import { CatFace, Sparkle, SquiggleRule } from '@/components/doodles';
 import { useSquareCard } from '@/hooks/use-square-card';
-import { menu } from '@/routes';
+import { menu, settings } from '@/routes';
 import { store } from '@/routes/checkout';
-import type { Cart, Money, SharedProps } from '@/types';
+import type { Cart, Money, SavedCard, SharedProps } from '@/types';
 
 const CARD_CONTAINER_ID = 'square-card';
 const GOOGLE_PAY_CONTAINER_ID = 'square-google-pay';
@@ -24,6 +24,17 @@ type Props = {
         configured: boolean;
     };
     allowTipping: boolean;
+    /** Empty for guests: a card on file needs an account to belong to. */
+    savedCards: SavedCard[];
+    canSaveCard: boolean;
+};
+
+/** The fields that say what this attempt is paying with. */
+type PaymentFields = {
+    source_id: string;
+    saved_card_id: number | null;
+    save_card: boolean;
+    verification_token: string | null;
 };
 
 function formatCents(cents: number, currency: string): string {
@@ -62,6 +73,8 @@ export default function Checkout({
     pricingPreview,
     square,
     allowTipping,
+    savedCards,
+    canSaveCard,
 }: Props) {
     // `checkout` is a page-level error bag thrown by CheckoutController,
     // not a field on this form, so it comes from the page rather than useForm.
@@ -72,6 +85,9 @@ export default function Checkout({
         email: auth.user?.email ?? '',
         notes: '',
         source_id: '',
+        saved_card_id: null as number | null,
+        save_card: false,
+        verification_token: null as string | null,
         tip_cents: 0,
         // Generated once per visit and reused on every retry, so a declined
         // card followed by a second attempt resumes one order rather than
@@ -86,6 +102,18 @@ export default function Checkout({
         'percent',
     );
     const [cardError, setCardError] = useState<string | null>(null);
+
+    // An expired card cannot be charged, so it is never the one offered first.
+    const [chosenCardId, setChosenCardId] = useState<number | null>(
+        savedCards.find((card) => !card.expired)?.id ?? null,
+    );
+    const [saveCard, setSaveCard] = useState(false);
+
+    // Looked up rather than held, so removing the chosen card falls back to
+    // the new-card form on the very next render.
+    const chosenCard =
+        savedCards.find((card) => card.id === chosenCardId) ?? null;
+    const usingNewCard = chosenCard === null;
 
     // Tokenizing is async and happens before the request starts, so
     // `form.processing` alone leaves a window where a second click could
@@ -131,7 +159,7 @@ export default function Checkout({
         enabled: square.configured && cart.valid && cart.lines.length > 0,
     });
 
-    async function pay(tokenize: () => Promise<string>) {
+    async function pay(prepare: () => Promise<PaymentFields>) {
         if (submitting.current || form.processing || !cart.valid) {
             return;
         }
@@ -147,11 +175,11 @@ export default function Checkout({
         };
 
         try {
-            const token = await tokenize();
+            const payment = await prepare();
 
             form.transform((data) => ({
                 ...data,
-                source_id: token,
+                ...payment,
                 tip_cents: tipCents,
             }));
             form.post(store().url, { preserveScroll: true, onFinish: unlock });
@@ -164,6 +192,48 @@ export default function Checkout({
             );
         }
     }
+
+    /** Wallets are one-off: there is no card of ours to keep. */
+    const payWithWallet = (tokenize: () => Promise<string>) =>
+        pay(async () => ({
+            source_id: await tokenize(),
+            saved_card_id: null,
+            save_card: false,
+            verification_token: null,
+        }));
+
+    const payWithNewCard = () =>
+        pay(async () => {
+            const token = await paymentMethods.tokenizeCard();
+
+            return {
+                source_id: token,
+                saved_card_id: null,
+                save_card: saveCard,
+                // Keeping a card is what can need the cardholder challenged;
+                // a one-off charge is sent exactly as it always was.
+                verification_token: saveCard
+                    ? await paymentMethods.verifyBuyer({
+                          sourceId: token,
+                          intent: 'STORE',
+                          name: form.data.name,
+                          email: form.data.email,
+                      })
+                    : null,
+            };
+        });
+
+    /**
+     * Only the row ID goes back to Laravel, which charges the card Square
+     * holds for it. Nothing chargeable is ever handed to the browser.
+     */
+    const payWithSavedCard = (card: SavedCard) =>
+        pay(async () => ({
+            source_id: '',
+            saved_card_id: card.id,
+            save_card: false,
+            verification_token: null,
+        }));
 
     if (cart.lines.length === 0) {
         return (
@@ -192,16 +262,13 @@ export default function Checkout({
     const fieldClasses =
         'rounded-full border-2 border-lav-300 bg-white px-4 py-2 font-hand text-lg text-lav-800 outline-none focus:border-lav-600';
 
+    // A pill shape looks wrong once the field grows to several lines.
+    const textareaClasses = `${fieldClasses.replace('rounded-full', 'rounded-2xl')} resize-y`;
+
     return (
         <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-5 sm:py-12">
             <Head title="Checkout" />
 
-            <Link
-                href={menu()}
-                className="font-hand text-lav-600 hover:text-lav-800 text-xl underline decoration-dashed"
-            >
-                ← back to the menu
-            </Link>
             <h1 className="font-marker text-lav-800 mt-4 text-4xl sm:text-5xl">
                 Checkout
             </h1>
@@ -362,14 +429,21 @@ export default function Checkout({
 
                         <label className="font-hand text-lav-700 mt-4 grid gap-1 text-xl">
                             Anything we should know?
-                            <input
+                            <textarea
                                 value={form.data.notes}
                                 onChange={(event) =>
                                     form.setData('notes', event.target.value)
                                 }
+                                rows={3}
+                                maxLength={500}
                                 placeholder="Extra hot, light ice…"
-                                className={fieldClasses}
+                                className={textareaClasses}
                             />
+                            {form.errors.notes && (
+                                <span className="font-hand text-base text-rose-700">
+                                    {form.errors.notes}
+                                </span>
+                            )}
                         </label>
                     </section>
 
@@ -524,7 +598,7 @@ export default function Checkout({
                                             type="button"
                                             aria-label={`Pay ${paymentTotal} with Apple Pay`}
                                             onClick={() =>
-                                                pay(
+                                                payWithWallet(
                                                     paymentMethods.tokenizeApplePay,
                                                 )
                                             }
@@ -540,7 +614,7 @@ export default function Checkout({
                                                 : 'wallet-pay-button h-12 w-full'
                                         }
                                         onClick={() =>
-                                            void pay(
+                                            void payWithWallet(
                                                 paymentMethods.tokenizeGooglePay,
                                             )
                                         }
@@ -548,7 +622,79 @@ export default function Checkout({
                                 </div>
                             </div>
 
-                            <div>
+                            {savedCards.length > 0 && (
+                                <div>
+                                    <h3 className="font-marker text-lav-800 mb-2 text-xl">
+                                        Your cards
+                                    </h3>
+                                    <ul className="grid gap-2">
+                                        {savedCards.map((card) => (
+                                            <li
+                                                key={card.id}
+                                                className="border-lav-300 rounded-2xl border-2 bg-white px-4 py-2.5"
+                                            >
+                                                <label className="font-hand text-lav-800 flex min-w-0 items-center gap-3 text-lg">
+                                                    <input
+                                                        type="radio"
+                                                        name="payment-method"
+                                                        className="accent-lav-600 size-4 shrink-0"
+                                                        checked={
+                                                            chosenCardId ===
+                                                            card.id
+                                                        }
+                                                        disabled={card.expired}
+                                                        onChange={() =>
+                                                            setChosenCardId(
+                                                                card.id,
+                                                            )
+                                                        }
+                                                    />
+                                                    <span className="min-w-0 truncate">
+                                                        {card.brand} ••••{' '}
+                                                        {card.last4}
+                                                        <span className="text-lav-600 ml-2 text-base">
+                                                            {card.expired
+                                                                ? 'expired'
+                                                                : `exp ${String(card.expMonth).padStart(2, '0')}/${String(card.expYear).slice(-2)}`}
+                                                        </span>
+                                                    </span>
+                                                </label>
+                                            </li>
+                                        ))}
+                                        <li className="border-lav-300 flex items-center rounded-2xl border-2 border-dashed px-4 py-2.5">
+                                            <label className="font-hand text-lav-800 flex flex-1 items-center gap-3 text-lg">
+                                                <input
+                                                    type="radio"
+                                                    name="payment-method"
+                                                    className="accent-lav-600 size-4 shrink-0"
+                                                    checked={usingNewCard}
+                                                    onChange={() =>
+                                                        setChosenCardId(null)
+                                                    }
+                                                />
+                                                Use a new card
+                                            </label>
+                                        </li>
+                                    </ul>
+                                    <Link
+                                        href={settings()}
+                                        className="font-hand text-lav-600 hover:text-lav-800 mt-2 inline-block text-base underline"
+                                    >
+                                        Manage your cards in settings
+                                    </Link>
+                                </div>
+                            )}
+
+                            {/* The card form stays attached even while a saved
+                                card is chosen: Square's iframes do not survive
+                                being mounted inside a hidden element. */}
+                            <div
+                                className={
+                                    usingNewCard
+                                        ? ''
+                                        : 'pointer-events-none absolute top-0 -left-[100vw] w-full opacity-0'
+                                }
+                            >
                                 <h3 className="font-marker text-lav-800 mb-2 text-xl">
                                     Card
                                 </h3>
@@ -568,6 +714,22 @@ export default function Checkout({
                                         {paymentMethods.error}
                                     </p>
                                 )}
+
+                                {canSaveCard && square.configured && (
+                                    <label className="font-hand text-lav-700 mt-3 flex items-center gap-3 text-lg">
+                                        <input
+                                            type="checkbox"
+                                            className="accent-lav-600 size-4"
+                                            checked={saveCard}
+                                            onChange={(event) =>
+                                                setSaveCard(
+                                                    event.target.checked,
+                                                )
+                                            }
+                                        />
+                                        Save this card for next time
+                                    </label>
+                                )}
                             </div>
 
                             {(errors.checkout || cardError) && (
@@ -581,10 +743,15 @@ export default function Checkout({
 
                             <button
                                 type="button"
-                                onClick={() => pay(paymentMethods.tokenizeCard)}
+                                onClick={() =>
+                                    chosenCard
+                                        ? payWithSavedCard(chosenCard)
+                                        : payWithNewCard()
+                                }
                                 disabled={
                                     locked ||
-                                    !paymentMethods.cardReady ||
+                                    (usingNewCard &&
+                                        !paymentMethods.cardReady) ||
                                     !cart.valid
                                 }
                                 className="sticker bg-lav-600 font-marker hover:bg-lav-700 mt-2 w-full rounded-full py-3 text-lg text-white transition disabled:opacity-40"

@@ -4,6 +4,7 @@ import type {
     SquarePaymentRequest,
     SquarePaymentRequestOptions,
     SquarePayments,
+    SquareVerifyBuyerDetails,
     SquareWallet,
 } from '@/types/square';
 
@@ -26,6 +27,16 @@ type Options = {
     enabled: boolean;
 };
 
+type VerifyBuyerOptions = {
+    sourceId: string;
+    intent: 'CHARGE' | 'STORE';
+    name: string;
+    email: string;
+    /** Required by Square for a charge; meaningless when storing a card. */
+    amountCents?: number;
+    currencyCode?: string;
+};
+
 type SquareCardState = {
     cardReady: boolean;
     applePayReady: boolean;
@@ -34,6 +45,7 @@ type SquareCardState = {
     tokenizeCard: () => Promise<string>;
     tokenizeApplePay: () => Promise<string>;
     tokenizeGooglePay: () => Promise<string>;
+    verifyBuyer: (options: VerifyBuyerOptions) => Promise<string | null>;
 };
 
 /** Loads the SDK once per page, reusing the tag on later mounts. */
@@ -251,6 +263,57 @@ export function useSquareCard({
             'Google Pay is not available. Please try another payment method.',
         );
 
+    /**
+     * Asks Square to challenge the cardholder, which the law requires in some
+     * regions before a card may be stored or charged again.
+     *
+     * A missing token is not a failure to stop on: where verification is not
+     * required Square has nothing to challenge, and where it is required
+     * Square declines the payment itself with a message the customer sees.
+     */
+    const verifyBuyer = async ({
+        sourceId,
+        intent,
+        name,
+        email,
+        amountCents,
+        currencyCode,
+    }: VerifyBuyerOptions): Promise<string | null> => {
+        if (!payments.current) {
+            return null;
+        }
+
+        const [givenName, ...familyName] = name.trim().split(/\s+/);
+
+        const details: SquareVerifyBuyerDetails = {
+            intent,
+            customerInitiated: true,
+            sellerKeyedIn: false,
+            billingContact: {
+                givenName: givenName ?? '',
+                familyName: familyName.join(' '),
+                email,
+            },
+            ...(intent === 'CHARGE'
+                ? {
+                      amount: ((amountCents ?? 0) / 100).toFixed(2),
+                      currencyCode,
+                  }
+                : {}),
+        };
+
+        try {
+            const result = await payments.current.verifyBuyer(
+                sourceId,
+                details,
+            );
+
+            return result?.token ?? null;
+        } catch {
+            return null;
+        }
+    };
+
     return {
         cardReady,
         applePayReady,
@@ -259,5 +322,6 @@ export function useSquareCard({
         tokenizeCard,
         tokenizeApplePay,
         tokenizeGooglePay,
+        verifyBuyer,
     };
 }

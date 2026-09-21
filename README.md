@@ -20,7 +20,8 @@ Square Catalog ──square:sync-catalog──▶ products ──▶ MenuControl
                                           │
                        CreateCheckout: re-price, re-verify against Square
                                           │
-                       Square order ──▶ PayOrder (Web Payments SDK token)
+            Square order ──▶ PayOrder (Web Payments SDK token, or
+                                      a card the account keeps on file)
                                           │
               HandleSquareWebhook ──▶ Order: paid → preparing → ready → completed
 ```
@@ -96,7 +97,8 @@ and `square:reconcile-orders` catches the rest. Webhooks just make it immediate.
 ## How it is put together
 
 - **Actions** (`app/Actions/`) hold the business operations: `SyncSquareCatalog`,
-  `CreateCheckout`, `PayOrder`, `CalculateOrderEta`, `HandleSquareWebhook`.
+  `CreateCheckout`, `ResolvePaymentSource`, `SaveCardOnFile`, `PayOrder`,
+  `CalculateOrderEta`, `HandleSquareWebhook`.
   Each one reads top to bottom and queries Eloquent directly.
 - **Controllers** are thin: validate, call an Action, return an Inertia response.
 - **`app/Square/`** is the only place that talks to Square. It speaks the v2
@@ -119,6 +121,11 @@ and `square:reconcile-orders` catches the rest. Webhooks just make it immediate.
   recorded, payload contents are never trusted, and a stale version is ignored.
 - **Order history is a snapshot.** Line items keep the name, options and prices
   from the moment of purchase.
+- **Cards on file stay at Square.** A signed-in customer can keep a card during
+  checkout; Square stores it against their customer record and this application
+  keeps only the brand, last four and expiry. The browser is given a local row
+  ID, never anything chargeable, and a card can only be charged or forgotten by
+  the account that saved it.
 
 ## Testing
 

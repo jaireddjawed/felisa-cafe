@@ -17,6 +17,7 @@ use Illuminate\Notifications\Notifiable;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property string|null $square_customer_id
  * @property CarbonImmutable|null $email_verified_at
  * @property string $password
  * @property string|null $remember_token
@@ -39,6 +40,17 @@ class User extends Authenticatable implements MustVerifyEmail
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * The cards this customer keeps on file. Guests cannot save a card,
+     * because there is no account to attach it to.
+     *
+     * @return HasMany<SavedCard, $this>
+     */
+    public function savedCards(): HasMany
+    {
+        return $this->hasMany(SavedCard::class)->latest('id');
     }
 
     public function sendEmailVerificationNotification(): void
