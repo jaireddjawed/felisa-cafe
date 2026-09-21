@@ -17,15 +17,15 @@ chown -R www-data:www-data /app/storage /app/bootstrap/cache
 # Run database migrations if configured or DB connection is present
 if [ "${AUTORUN_MIGRATIONS:-true}" = "true" ] && [ -n "${DB_HOST}" ]; then
     echo "Running database migrations..."
-    php artisan migrate --force || echo "Migration failed, continuing boot..."
+    php artisan migrate --force
 fi
 
 # Cache configuration, routes, and views if in production
 if [ "${APP_ENV}" = "production" ]; then
     echo "Caching configuration and routes for production..."
-    php artisan config:cache || true
-    php artisan route:cache || true
-    php artisan view:cache || true
+    php artisan config:cache
+    php artisan route:cache
+    php artisan view:cache
 fi
 
 echo "Starting FrankenPHP server on port ${PORT}..."

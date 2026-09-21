@@ -1,12 +1,13 @@
 services:
-    # Web Service running the Laravel + React App with FrankenPHP
+    # Free-tier test deployment. Render Cron Jobs are paid, so Square webhooks
+    # provide the immediate catalog sync and the fallback scheduler is omitted.
     - type: web
       name: felisa-cafe
-      env: docker
+      runtime: docker
       dockerfilePath: Dockerfile
-      plan: starter # or 'free' if available for web services
-      region: oregon # or ohio, frankfurt, singapore
-      healthCheckPath: /
+      plan: free
+      region: oregon
+      healthCheckPath: /up
       envVars:
           - key: APP_NAME
             value: 'Felisa Cafe'
@@ -15,9 +16,11 @@ services:
           - key: APP_DEBUG
             value: 'false'
           - key: APP_KEY
-            generateValue: true
+            sync: false
           - key: APP_URL
-            sync: false # Set to your Render custom domain / onrender.com URL
+            sync: false
+          - key: LOG_CHANNEL
+            value: stderr
           - key: DB_CONNECTION
             value: pgsql
           - key: DB_HOST
@@ -46,10 +49,24 @@ services:
             value: database
           - key: QUEUE_CONNECTION
             value: database
+          - key: SQUARE_ACCESS_TOKEN
+            sync: false
+          - key: SQUARE_APPLICATION_ID
+            sync: false
+          - key: SQUARE_LOCATION_ID
+            sync: false
+          - key: SQUARE_ENVIRONMENT
+            value: sandbox
+          - key: SQUARE_CURRENCY
+            value: USD
+          - key: SQUARE_WEBHOOK_SIGNATURE_KEY
+            sync: false
+          - key: SQUARE_WEBHOOK_URL
+            sync: false
 
 databases:
     - name: felisa-cafe-db
-      plan: free # Render free PostgreSQL instance (dev tier)
+      plan: free
       region: oregon
       databaseName: felisa_cafe
       user: postgres

@@ -1,23 +1,5 @@
 # ==========================================
-# 1. Frontend Build Stage
-# ==========================================
-FROM node:22-alpine AS frontend-builder
-WORKDIR /app
-
-# Copy package manifests and install dependencies
-COPY package.json package-lock.json* ./
-RUN npm install
-
-# Copy application source needed for Vite asset compilation
-COPY vite.config.ts tsconfig.json components.json* ./
-COPY resources ./resources
-COPY public ./public
-
-# Build frontend assets (Inertia + React + Tailwind)
-RUN npm run build
-
-# ==========================================
-# 2. Composer Dependencies Stage
+# 1. Composer Dependencies Stage
 # ==========================================
 FROM composer:2 AS composer-builder
 WORKDIR /app
@@ -33,6 +15,19 @@ RUN composer install \
 
 COPY . .
 RUN composer dump-autoload --optimize --no-dev
+
+# ==========================================
+# 2. Frontend Build Stage
+# ==========================================
+# Wayfinder invokes `php artisan` during Vite compilation, so this stage needs
+# the Composer-installed application as well as Node.
+FROM composer-builder AS frontend-builder
+
+COPY --from=node:22-alpine /usr/local/bin /usr/local/bin
+COPY --from=node:22-alpine /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+RUN npm ci
+RUN npm run build
 
 # ==========================================
 # 3. Final Production Stage with FrankenPHP
@@ -66,6 +61,7 @@ COPY --chown=www-data:www-data . /app
 
 # Copy built vendor and frontend assets from previous stages
 COPY --from=composer-builder --chown=www-data:www-data /app/vendor /app/vendor
+COPY --from=composer-builder --chown=www-data:www-data /app/bootstrap/cache /app/bootstrap/cache
 COPY --from=frontend-builder --chown=www-data:www-data /app/public/build /app/public/build
 
 # Copy Caddy and entrypoint configurations

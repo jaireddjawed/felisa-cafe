@@ -139,3 +139,19 @@ snapshots, and the ETA algorithm.
   `routes/console.php`).
 - Run `php artisan square:sync-catalog` once after deploying.
 - Refunds are handled in Square; the local projection does not track them yet.
+
+### Render test deployment
+
+The repository includes a Docker-based `render.yaml` that provisions a free
+web service and Postgres database. Create a Render Blueprint from the repo and
+provide the prompted values for `APP_KEY`, `APP_URL`, and the Square settings.
+Generate the application key locally with:
+
+```bash
+php artisan key:generate --show
+```
+
+Set `SQUARE_WEBHOOK_URL` to `https://<your-service>.onrender.com/webhooks/square`
+and use that exact URL for the Square webhook subscription. The free Blueprint
+does not add Render Cron Jobs, so Square webhooks handle prompt updates and the
+catalog can be synced manually with `php artisan square:sync-catalog`.
