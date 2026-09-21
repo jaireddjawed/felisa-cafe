@@ -69,6 +69,11 @@ COPY docker/Caddyfile /etc/caddy/Caddyfile
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# The base image grants frankenphp cap_net_bind_service, which Render's runtime
+# doesn't allow (exec fails with "Operation not permitted"). We listen on an
+# unprivileged port, so the capability isn't needed.
+RUN setcap -r /usr/local/bin/frankenphp
+
 # Environment settings
 ENV APP_ENV=production \
     APP_DEBUG=false \
