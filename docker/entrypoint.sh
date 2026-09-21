@@ -18,6 +18,16 @@ chown -R www-data:www-data /app/storage /app/bootstrap/cache
 if [ "${AUTORUN_MIGRATIONS:-true}" = "true" ] && [ -n "${DB_HOST}" ]; then
     echo "Running database migrations..."
     php artisan migrate --force
+
+    # Load the menu so the storefront isn't empty. Both steps are idempotent:
+    # the seeder upserts by slug, and the Square sync adopts those rows.
+    php artisan db:seed --class=MenuSeeder --force
+
+    # Square being unreachable or unconfigured must not stop the server booting.
+    if [ -n "${SQUARE_ACCESS_TOKEN}" ]; then
+        echo "Syncing Square catalog..."
+        timeout 60 php artisan square:sync-catalog || echo "Square catalog sync failed; continuing."
+    fi
 fi
 
 # Cache configuration, routes, and views if in production
