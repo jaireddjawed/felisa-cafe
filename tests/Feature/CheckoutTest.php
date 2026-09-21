@@ -152,6 +152,73 @@ it("takes a signed-in customer's name and email from their account", function ()
         ->and($order->status)->toBe(OrderStatus::Paid);
 });
 
+it('sends the receipt to the confirmed address while the new one is unconfirmed', function (): void {
+    Notification::fake();
+
+    $user = User::factory()->unverified()->create([
+        'email' => 'new@example.com',
+        'last_confirmed_email' => 'old@example.com',
+    ]);
+    $this->actingAs($user);
+
+    $product = checkoutReadyCart();
+    fakeSquareFor($product);
+
+    $this->post(route('checkout.store'), checkoutPayload())->assertSessionHasNoErrors();
+
+    $order = Order::query()->firstOrFail();
+
+    expect($order->customer_email)->toBe('old@example.com')
+        ->and($order->receipt_sent_at)->not->toBeNull();
+
+    Notification::assertSentOnDemand(
+        OrderReceipt::class,
+        fn ($notification, array $channels, $notifiable): bool => array_key_exists('old@example.com', $notifiable->routes['mail']),
+    );
+});
+
+it('sends the receipt to the new address once it is confirmed', function (): void {
+    Notification::fake();
+
+    $user = User::factory()->create([
+        'email' => 'new@example.com',
+        'last_confirmed_email' => 'old@example.com',
+    ]);
+    $this->actingAs($user);
+
+    $product = checkoutReadyCart();
+    fakeSquareFor($product);
+
+    $this->post(route('checkout.store'), checkoutPayload())->assertSessionHasNoErrors();
+
+    expect(Order::query()->firstOrFail()->customer_email)->toBe('new@example.com');
+});
+
+it('tells the checkout page where the receipt will go', function (): void {
+    $user = User::factory()->unverified()->create([
+        'email' => 'new@example.com',
+        'last_confirmed_email' => 'old@example.com',
+    ]);
+
+    $product = checkoutReadyCart();
+    fakeSquareFor($product);
+
+    $this->actingAs($user)
+        ->get(route('checkout'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('receiptEmail', 'old@example.com')
+            ->where('emailConfirmed', false)
+        );
+
+    $this->post(route('logout'));
+
+    $this->get(route('checkout'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('receiptEmail', null)
+            ->where('emailConfirmed', true)
+        );
+});
+
 it('ignores a different name and email sent for a signed-in customer', function (): void {
     $this->actingAs(User::factory()->create(['name' => 'Jaired', 'email' => 'account@example.com']));
 

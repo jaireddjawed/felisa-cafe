@@ -36,6 +36,10 @@ type Props = {
     /** Empty for guests: a card on file needs an account to belong to. */
     savedCards: SavedCard[];
     canSaveCard: boolean;
+    /** Where a signed-in customer's receipt goes; null for guests. */
+    receiptEmail: string | null;
+    /** False while the account's newest email is still unconfirmed. */
+    emailConfirmed: boolean;
 };
 
 /** The fields that say what this attempt is paying with. */
@@ -84,6 +88,8 @@ export default function Checkout({
     allowTipping,
     savedCards,
     canSaveCard,
+    receiptEmail,
+    emailConfirmed,
 }: Props) {
     // `checkout` is a page-level error bag thrown by CheckoutController,
     // not a field on this form, so it comes from the page rather than useForm.
@@ -463,7 +469,13 @@ export default function Checkout({
                                     </span>
                                 </p>
                                 <p className="font-hand text-lav-600 text-lg wrap-break-word">
-                                    Your receipt will go to {auth.user.email}.
+                                    Your receipt will go to{' '}
+                                    {receiptEmail ?? auth.user.email}
+                                    {!emailConfirmed &&
+                                    receiptEmail &&
+                                    receiptEmail !== auth.user.email
+                                        ? `, because ${auth.user.email} isn't confirmed yet.`
+                                        : '.'}
                                 </p>
                             </div>
                         ) : (

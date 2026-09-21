@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // so generated URLs use https.
         $middleware->trustProxies(at: '*');
 
+        // Changing or resetting a password signs out every other device. The
+        // device that made the change stays signed in.
+        $middleware->authenticateSessions();
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

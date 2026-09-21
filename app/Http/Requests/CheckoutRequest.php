@@ -67,7 +67,9 @@ class CheckoutRequest extends FormRequest
         if ($user instanceof User) {
             return new CustomerContact(
                 name: trim($user->name),
-                email: trim($user->email),
+                // The address the receipt can safely go to, which is not
+                // necessarily the account's newest one.
+                email: trim($user->receiptEmail()),
             );
         }
 
