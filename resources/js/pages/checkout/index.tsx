@@ -169,6 +169,14 @@ export default function Checkout({
         !paymentMethods.cardReady &&
         !paymentMethods.error;
 
+    // Same conditions as the card, plus wallet detection not having finished.
+    // A card-form failure means the wallets never start, so it ends this too.
+    const walletsLoading =
+        square.configured &&
+        cart.valid &&
+        !paymentMethods.walletsSettled &&
+        !paymentMethods.error;
+
     async function pay(prepare: () => Promise<PaymentFields>) {
         if (submitting.current || form.processing || !cart.valid) {
             return;
@@ -591,6 +599,19 @@ export default function Checkout({
                                             </div>
                                         )}
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Wallet buttons are only known to exist once
+                                detection finishes, and they render off-screen
+                                until then. This holds their place, and simply
+                                goes away when no wallet is available. */}
+                            {walletsLoading && (
+                                <div
+                                    role="status"
+                                    aria-label="Checking for Apple Pay and Google Pay"
+                                >
+                                    <Skeleton className="h-12 w-full rounded-xl" />
                                 </div>
                             )}
 
