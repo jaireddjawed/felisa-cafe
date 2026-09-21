@@ -329,7 +329,7 @@ final class FakeSquareClient implements SquareGateway
             return new SquareUnavailableException("Square {$path} failed with {$status}: ".trim("{$code} {$detail}"));
         }
 
-        return new SquareRejectedException($message);
+        return new SquareRejectedException($message, errorCode: $code === 'UNKNOWN' ? null : $code);
     }
 
     /**

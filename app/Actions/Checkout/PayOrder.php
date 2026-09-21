@@ -49,7 +49,7 @@ class PayOrder
 
         try {
             $result = $this->square->createPayment(
-                idempotencyKey: $idempotencyKey,
+                idempotencyKey: $this->paymentKey($order, $source, $tipCents, $idempotencyKey),
                 squareOrderId: $order->square_order_id,
                 referenceId: (string) $order->id,
                 amountCents: $order->total_cents,
@@ -65,9 +65,7 @@ class PayOrder
         } catch (SquareRejectedException $exception) {
             report($exception);
 
-            throw CheckoutException::declined(
-                'That card was declined. Please check the details or try another card.'
-            );
+            throw CheckoutException::declined(PaymentFailureMessage::for($exception));
         } catch (SquareUnavailableException $exception) {
             report($exception);
 
@@ -82,6 +80,28 @@ class PayOrder
         $source->savedCard?->forceFill(['last_used_at' => now()])->save();
 
         return $this->applyState->handle($order, $result->order);
+    }
+
+    /**
+     * The key sent to Square for this charge.
+     *
+     * Square replays an earlier answer for a repeated key and rejects the
+     * same key used with different details, so the key has to change whenever
+     * what is being charged does: a different card, customer, total or tip.
+     * An identical retry (a double click, or a resent request after a lost
+     * response) produces the identical key, so Square replays it instead of
+     * charging twice. Hashing also keeps it inside Square's length limit
+     * however long the browser's key is.
+     */
+    private function paymentKey(Order $order, PaymentSource $source, int $tipCents, string $base): string
+    {
+        return 'felisa-pay-'.hash('sha256', implode('|', [
+            $base,
+            $source->sourceId,
+            $source->squareCustomerId ?? '',
+            $order->total_cents,
+            $tipCents,
+        ]));
     }
 
     private function validateTip(Order $order, int $tipCents): int

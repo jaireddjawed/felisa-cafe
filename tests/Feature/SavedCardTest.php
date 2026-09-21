@@ -133,6 +133,22 @@ it('keeps a card on file when the customer asks for it', function (): void {
         ->and(Order::query()->firstOrFail()->status)->toBe(OrderStatus::Paid);
 });
 
+it("derives the Square customer key from the account's email, not its ID", function (): void {
+    // IDs are only unique within one database, and every environment using the
+    // same Square account shares one set of idempotency keys.
+    $this->actingAs(User::factory()->create(['email' => 'Card.Owner@Example.com']));
+
+    $product = cardReadyCart();
+    fakeSquareWithCards($product);
+
+    $this->post(route('checkout.store'), cardCheckoutPayload(['save_card' => true]));
+
+    $expected = 'felisa-customer-'.hash('sha256', 'card.owner@example.com');
+
+    Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/v2/customers')
+        && $request->data()['idempotency_key'] === $expected);
+});
+
 it('charges the stored card rather than the token that created it', function (): void {
     $this->actingAs(User::factory()->create());
 

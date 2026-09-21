@@ -12,9 +12,11 @@ use App\Square\SquareGateway;
  * Cards on file belong to a Square customer, so an account needs one before
  * its first card can be stored.
  *
- * The idempotency key is derived from the account ID, so a retry after a lost
- * response returns the customer created the first time instead of a second
- * one.
+ * The idempotency key is derived from the account's email, so a retry after a
+ * lost response returns the customer created the first time instead of a
+ * second one. It is not the account ID: IDs are only unique within one
+ * database, and Square's keys are shared by every environment using the same
+ * account, so user 2 elsewhere would be handed this user's customer.
  */
 class EnsureSquareCustomer
 {
@@ -27,7 +29,7 @@ class EnsureSquareCustomer
         }
 
         $customerId = $this->square->createCustomer(
-            idempotencyKey: "felisa-customer-{$user->id}",
+            idempotencyKey: 'felisa-customer-'.hash('sha256', mb_strtolower(trim($user->email))),
             customer: $contact,
             referenceId: (string) $user->id,
         );

@@ -370,16 +370,126 @@ it('never charges twice for a resubmitted form', function (): void {
     Http::assertSentCount(4);
 });
 
-it('derives the Square idempotency key from the order, so a retry replays it', function (): void {
+it('derives the Square order key from the checkout key, so a retry replays it', function (): void {
     $product = checkoutReadyCart();
     fakeSquareFor($product);
 
     $this->post(route('checkout.store'), checkoutPayload());
 
-    $order = Order::query()->firstOrFail();
+    // Not from the local order ID: two environments sharing one Square account
+    // each hand out "order 4", and Square would replay the first one's paid
+    // order for the second. The browser's random key is unique to a checkout.
+    $expected = 'felisa-order-'.hash('sha256', 'checkout-key-0000000001');
 
     Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/v2/orders')
-        && $request->data()['idempotency_key'] === "felisa-order-{$order->id}");
+        && $request->data()['idempotency_key'] === $expected);
+});
+
+it('sends Square the same order key when the same checkout is retried', function (): void {
+    $product = checkoutReadyCart();
+    $variationId = $product->load('variations')->variations->firstOrFail()->square_variation_id;
+
+    // The first attempt reaches Square but its response is lost.
+    FakeSquare::fake([
+        '/v2/catalog/batch-retrieve' => Http::response(FakeSquare::livePrices(
+            variationPrices: [$variationId => 850], modifierPrices: ['MOD_OAT' => 0],
+        )),
+        '/v2/orders' => Http::response('', 503),
+    ]);
+    $this->post(route('checkout.store'), checkoutPayload());
+
+    fakeSquareFor($product);
+    $this->post(route('checkout.store'), checkoutPayload());
+
+    $keys = Http::recorded(fn ($request): bool => str_ends_with($request->url(), '/v2/orders'))
+        ->map(fn (array $pair): string => $pair[0]->data()['idempotency_key'])
+        ->unique();
+
+    expect($keys)->toHaveCount(1);
+});
+
+/** Square accepts the order and refuses the payment with this error. */
+function fakeSquareRefusingPayment(Product $product, int $status, string $code, string $detail = ''): void
+{
+    $variationId = $product->load('variations')->variations->firstOrFail()->square_variation_id;
+
+    FakeSquare::fake([
+        '/v2/catalog/batch-retrieve' => Http::response(FakeSquare::livePrices(
+            variationPrices: [$variationId => 850], modifierPrices: ['MOD_OAT' => 0],
+        )),
+        '/v2/orders' => Http::response(FakeSquare::order()),
+        '/v2/payments' => Http::response(['errors' => [['code' => $code, 'detail' => $detail]]], $status),
+    ]);
+}
+
+/**
+ * The idempotency keys sent to Square's payments endpoint, in order.
+ *
+ * @return list<string>
+ */
+function paymentKeysSent(): array
+{
+    return Http::recorded(fn ($request): bool => str_ends_with($request->url(), '/v2/payments'))
+        ->map(fn (array $pair): string => $pair[0]->data()['idempotency_key'])
+        ->values()
+        ->all();
+}
+
+it('sends the same payment key when the identical charge is retried', function (): void {
+    $product = checkoutReadyCart();
+    fakeSquareRefusingPayment($product, 402, 'CARD_DECLINED');
+
+    $this->post(route('checkout.store'), checkoutPayload());
+    $this->post(route('checkout.store'), checkoutPayload());
+
+    [$first, $second] = paymentKeysSent();
+
+    // Identical details: Square replays rather than charging twice.
+    expect($first)->toBe($second);
+});
+
+it('sends a different payment key when the card or the tip changes', function (): void {
+    $product = checkoutReadyCart();
+    fakeSquareRefusingPayment($product, 402, 'CARD_DECLINED');
+
+    $this->post(route('checkout.store'), checkoutPayload());
+    $this->post(route('checkout.store'), checkoutPayload(['source_id' => 'cnon:another-card']));
+    $this->post(route('checkout.store'), checkoutPayload(['tip_cents' => 200]));
+
+    // Same key with different details is rejected by Square, and would read
+    // to the customer as a declined card.
+    expect(array_unique(paymentKeysSent()))->toHaveCount(3);
+});
+
+it('tells the customer their card was declined only when it was', function (): void {
+    $product = checkoutReadyCart();
+    fakeSquareRefusingPayment($product, 402, 'CARD_DECLINED', 'Card declined.');
+
+    $this->post(route('checkout.store'), checkoutPayload())
+        ->assertSessionHasErrors('checkout');
+
+    expect(session('errors')->first('checkout'))->toContain('declined');
+});
+
+it('says what was wrong with the card when Square says so', function (): void {
+    $product = checkoutReadyCart();
+    fakeSquareRefusingPayment($product, 402, 'INSUFFICIENT_FUNDS');
+
+    $this->post(route('checkout.store'), checkoutPayload())
+        ->assertSessionHasErrors('checkout');
+
+    expect(session('errors')->first('checkout'))->toContain('insufficient funds');
+});
+
+it('does not blame the card when the payment was refused for another reason', function (): void {
+    $product = checkoutReadyCart();
+    fakeSquareRefusingPayment($product, 400, 'BAD_REQUEST', 'The order is already paid.');
+
+    $this->post(route('checkout.store'), checkoutPayload())
+        ->assertSessionHasErrors('checkout');
+
+    expect(session('errors')->first('checkout'))->not->toContain('declined')
+        ->and(Order::query()->firstOrFail()->status)->toBe(OrderStatus::PendingPayment);
 });
 
 it('creates the Square order when an earlier attempt never reached Square', function (): void {
