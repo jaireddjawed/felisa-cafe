@@ -394,56 +394,70 @@ export default function Checkout({
                             <h2 className="font-marker text-lav-800 text-2xl">
                                 Contact details
                             </h2>
-                            {auth.user && (
-                                <span className="bg-lav-200 font-hand text-lav-700 rounded-full px-3 py-1 text-sm">
-                                    Signed in
-                                </span>
-                            )}
                         </div>
 
-                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                            <label className="font-hand text-lav-700 grid gap-1 text-xl">
-                                Name
-                                <input
-                                    value={form.data.name}
-                                    onChange={(event) =>
-                                        form.setData('name', event.target.value)
-                                    }
-                                    required
-                                    autoComplete="name"
-                                    placeholder="Your name"
-                                    className={fieldClasses}
-                                />
-                                {form.errors.name && (
-                                    <span className="font-hand text-base text-rose-700">
-                                        {form.errors.name}
+                        {auth.user ? (
+                            // The account already says who this is, and the
+                            // server uses it, so there is nothing to type.
+                            <div className="mt-4">
+                                <p className="font-hand text-lav-700 text-xl">
+                                    Ordering as{' '}
+                                    <span className="font-marker text-lav-800">
+                                        {auth.user.name}
                                     </span>
-                                )}
-                            </label>
+                                </p>
+                                <p className="font-hand text-lav-600 text-lg wrap-break-word">
+                                    Your receipt will go to {auth.user.email}.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                <label className="font-hand text-lav-700 grid gap-1 text-xl">
+                                    Name
+                                    <input
+                                        value={form.data.name}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'name',
+                                                event.target.value,
+                                            )
+                                        }
+                                        required
+                                        autoComplete="name"
+                                        placeholder="Your name"
+                                        className={fieldClasses}
+                                    />
+                                    {form.errors.name && (
+                                        <span className="font-hand text-base text-rose-700">
+                                            {form.errors.name}
+                                        </span>
+                                    )}
+                                </label>
 
-                            <label className="font-hand text-lav-700 grid gap-1 text-xl">
-                                Email
-                                <input
-                                    type="email"
-                                    value={form.data.email}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'email',
-                                            event.target.value,
-                                        )
-                                    }
-                                    required
-                                    autoComplete="email"
-                                    placeholder="name@example.com"
-                                    className={fieldClasses}
-                                />
-                                {form.errors.email && (
-                                    <span className="font-hand text-base text-rose-700">
-                                        {form.errors.email}
-                                    </span>
-                                )}
-                            </label>
-                        </div>
+                                <label className="font-hand text-lav-700 grid gap-1 text-xl">
+                                    Email
+                                    <input
+                                        type="email"
+                                        value={form.data.email}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'email',
+                                                event.target.value,
+                                            )
+                                        }
+                                        required
+                                        autoComplete="email"
+                                        placeholder="name@example.com"
+                                        className={fieldClasses}
+                                    />
+                                    {form.errors.email && (
+                                        <span className="font-hand text-base text-rose-700">
+                                            {form.errors.email}
+                                        </span>
+                                    )}
+                                </label>
+                            </div>
+                        )}
 
                         <label className="font-hand text-lav-700 mt-4 grid gap-1 text-xl">
                             Anything we should know?
