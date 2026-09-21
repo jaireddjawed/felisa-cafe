@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\SavedCard;
 use App\Models\User;
+use App\Square\IdempotencyKey;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
@@ -143,7 +144,7 @@ it("derives the Square customer key from the account's email, not its ID", funct
 
     $this->post(route('checkout.store'), cardCheckoutPayload(['save_card' => true]));
 
-    $expected = 'felisa-customer-'.hash('sha256', 'card.owner@example.com');
+    $expected = IdempotencyKey::make('felisa-customer', 'card.owner@example.com');
 
     Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/v2/customers')
         && $request->data()['idempotency_key'] === $expected);

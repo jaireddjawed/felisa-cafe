@@ -8,6 +8,7 @@ use App\Actions\Orders\ApplySquareOrderState;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Square\Data\CustomerContact;
+use App\Square\IdempotencyKey;
 use App\Square\SquareGateway;
 use App\Square\SquareRejectedException;
 use App\Square\SquareUnavailableException;
@@ -90,18 +91,18 @@ class PayOrder
      * what is being charged does: a different card, customer, total or tip.
      * An identical retry (a double click, or a resent request after a lost
      * response) produces the identical key, so Square replays it instead of
-     * charging twice. Hashing also keeps it inside Square's length limit
-     * however long the browser's key is.
+     * charging twice. See IdempotencyKey for the length Square allows.
      */
     private function paymentKey(Order $order, PaymentSource $source, int $tipCents, string $base): string
     {
-        return 'felisa-pay-'.hash('sha256', implode('|', [
+        return IdempotencyKey::make(
+            'felisa-pay',
             $base,
             $source->sourceId,
             $source->squareCustomerId ?? '',
-            $order->total_cents,
-            $tipCents,
-        ]));
+            (string) $order->total_cents,
+            (string) $tipCents,
+        );
     }
 
     private function validateTip(Order $order, int $tipCents): int

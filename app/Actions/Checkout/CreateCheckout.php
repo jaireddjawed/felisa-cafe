@@ -14,6 +14,7 @@ use App\Models\Modifier;
 use App\Models\Order;
 use App\Square\Data\CustomerContact;
 use App\Square\Data\OrderLine;
+use App\Square\IdempotencyKey;
 use App\Square\SquareGateway;
 use App\Square\SquareRejectedException;
 use App\Square\SquareUnavailableException;
@@ -277,7 +278,7 @@ class CreateCheckout
      */
     private function squareOrderKey(Order $order): string
     {
-        return 'felisa-order-'.hash('sha256', $order->idempotency_key);
+        return IdempotencyKey::make('felisa-order', $order->idempotency_key);
     }
 
     private function prepMinutes(Order $order): int

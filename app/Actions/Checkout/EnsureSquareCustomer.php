@@ -6,6 +6,7 @@ namespace App\Actions\Checkout;
 
 use App\Models\User;
 use App\Square\Data\CustomerContact;
+use App\Square\IdempotencyKey;
 use App\Square\SquareGateway;
 
 /**
@@ -29,7 +30,7 @@ class EnsureSquareCustomer
         }
 
         $customerId = $this->square->createCustomer(
-            idempotencyKey: 'felisa-customer-'.hash('sha256', mb_strtolower(trim($user->email))),
+            idempotencyKey: IdempotencyKey::make('felisa-customer', mb_strtolower(trim($user->email))),
             customer: $contact,
             referenceId: (string) $user->id,
         );

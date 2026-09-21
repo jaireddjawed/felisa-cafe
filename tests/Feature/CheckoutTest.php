@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Notifications\OrderReceipt;
+use App\Square\IdempotencyKey;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
@@ -379,7 +380,7 @@ it('derives the Square order key from the checkout key, so a retry replays it', 
     // Not from the local order ID: two environments sharing one Square account
     // each hand out "order 4", and Square would replay the first one's paid
     // order for the second. The browser's random key is unique to a checkout.
-    $expected = 'felisa-order-'.hash('sha256', 'checkout-key-0000000001');
+    $expected = IdempotencyKey::make('felisa-order', 'checkout-key-0000000001');
 
     Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/v2/orders')
         && $request->data()['idempotency_key'] === $expected);

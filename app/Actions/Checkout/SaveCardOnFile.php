@@ -8,6 +8,7 @@ use App\Models\SavedCard;
 use App\Models\User;
 use App\Square\Data\CustomerContact;
 use App\Square\Data\StoredCard;
+use App\Square\IdempotencyKey;
 use App\Square\SquareException;
 use App\Square\SquareGateway;
 
@@ -45,7 +46,7 @@ class SaveCardOnFile
         $customerId = $this->ensureCustomer->handle($user, $contact);
 
         $stored = $this->square->createCard(
-            idempotencyKey: 'felisa-card-'.mb_substr(hash('sha256', $sourceId), 0, 32),
+            idempotencyKey: IdempotencyKey::make('felisa-card', $sourceId),
             customerId: $customerId,
             sourceId: $sourceId,
             customer: $contact,
