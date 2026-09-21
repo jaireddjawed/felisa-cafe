@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\SavedCard;
+use App\Models\User;
 use App\Square\Data\CustomerContact;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -22,9 +23,13 @@ class CheckoutRequest extends FormRequest
      */
     public function rules(): array
     {
+        // A signed-in customer's name and email come from their account (see
+        // contact()), so only a guest has to supply them.
+        $guest = $this->user() === null;
+
         return [
-            'name' => ['required', 'string', 'max:191'],
-            'email' => ['required', 'email', 'max:191'],
+            'name' => [$guest ? 'required' : 'nullable', 'string', 'max:191'],
+            'email' => [$guest ? 'required' : 'nullable', 'email', 'max:191'],
             'notes' => ['nullable', 'string', 'max:500'],
             // Generated once per checkout attempt in the browser and reused on
             // retry, so a resubmitted form resumes one order rather than
@@ -50,8 +55,22 @@ class CheckoutRequest extends FormRequest
         ];
     }
 
+    /**
+     * Who the order is for. An account is the source of truth for its own
+     * name and email, so whatever the browser sent is ignored for a signed-in
+     * customer; a guest has only what they typed.
+     */
     public function contact(): CustomerContact
     {
+        $user = $this->user();
+
+        if ($user instanceof User) {
+            return new CustomerContact(
+                name: trim($user->name),
+                email: trim($user->email),
+            );
+        }
+
         return new CustomerContact(
             name: trim($this->string('name')->toString()),
             email: trim($this->string('email')->toString()),

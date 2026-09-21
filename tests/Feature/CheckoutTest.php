@@ -131,6 +131,45 @@ it('attaches the order to a signed-in customer', function (): void {
     expect(Order::query()->firstOrFail()->user_id)->toBe($user->id);
 });
 
+it("takes a signed-in customer's name and email from their account", function (): void {
+    $user = User::factory()->create(['name' => 'Jaired', 'email' => 'account@example.com']);
+    $this->actingAs($user);
+
+    $product = checkoutReadyCart();
+    fakeSquareFor($product);
+
+    // The form no longer asks a signed-in customer for either.
+    $payload = checkoutPayload();
+    unset($payload['name'], $payload['email']);
+
+    $this->post(route('checkout.store'), $payload)->assertSessionHasNoErrors();
+
+    $order = Order::query()->firstOrFail();
+
+    expect($order->customer_name)->toBe('Jaired')
+        ->and($order->customer_email)->toBe('account@example.com')
+        ->and($order->status)->toBe(OrderStatus::Paid);
+});
+
+it('ignores a different name and email sent for a signed-in customer', function (): void {
+    $this->actingAs(User::factory()->create(['name' => 'Jaired', 'email' => 'account@example.com']));
+
+    $product = checkoutReadyCart();
+    fakeSquareFor($product);
+
+    $this->post(route('checkout.store'), checkoutPayload([
+        'name' => 'Someone Else',
+        'email' => 'someone.else@example.com',
+    ]));
+
+    $order = Order::query()->firstOrFail();
+
+    // The account is the source of truth, so a tampered form cannot redirect
+    // the receipt or rename the pickup.
+    expect($order->customer_name)->toBe('Jaired')
+        ->and($order->customer_email)->toBe('account@example.com');
+});
+
 it('prices the order from local products, not from the browser', function (): void {
     $product = checkoutReadyCart();
     fakeSquareFor($product);
