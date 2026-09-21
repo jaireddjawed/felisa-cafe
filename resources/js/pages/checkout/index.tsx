@@ -1,6 +1,7 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useRef, useState } from 'react';
 import { CatFace, Sparkle, SquiggleRule } from '@/components/doodles';
+import Skeleton from '@/components/skeleton';
 import { useSquareCard } from '@/hooks/use-square-card';
 import { menu, settings } from '@/routes';
 import { store } from '@/routes/checkout';
@@ -158,6 +159,15 @@ export default function Checkout({
         paymentRequest,
         enabled: square.configured && cart.valid && cart.lines.length > 0,
     });
+
+    // Show the placeholder only while the form can still arrive: not when
+    // Square is unconfigured, the cart cannot be paid, or loading has failed
+    // (each of those already says so on its own).
+    const cardLoading =
+        square.configured &&
+        cart.valid &&
+        !paymentMethods.cardReady &&
+        !paymentMethods.error;
 
     async function pay(prepare: () => Promise<PaymentFields>) {
         if (submitting.current || form.processing || !cart.valid) {
@@ -698,15 +708,36 @@ export default function Checkout({
                                 <h3 className="font-marker text-lav-800 mb-2 text-xl">
                                     Card
                                 </h3>
-                                <div
-                                    id={CARD_CONTAINER_ID}
-                                    className="border-lav-200 min-h-[90px] rounded-2xl border-2 bg-white p-3"
-                                >
-                                    {!square.configured && (
-                                        <p className="font-hand text-lav-500 py-6 text-center text-lg">
-                                            Card payments are not configured
-                                            yet.
-                                        </p>
+                                <div className="relative">
+                                    <div
+                                        id={CARD_CONTAINER_ID}
+                                        className="border-lav-200 min-h-[90px] rounded-2xl border-2 bg-white p-3"
+                                    >
+                                        {!square.configured && (
+                                            <p className="font-hand text-lav-500 py-6 text-center text-lg">
+                                                Card payments are not configured
+                                                yet.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Square fills the container above with its
+                                        own iframes, so the placeholder sits over
+                                        it instead of inside it, and goes away
+                                        the moment the real form is ready. */}
+                                    {cardLoading && (
+                                        <div
+                                            role="status"
+                                            aria-label="Loading the card form"
+                                            className="border-lav-200 absolute inset-0 grid content-start gap-3 rounded-2xl border-2 bg-white p-3"
+                                        >
+                                            <div className="border-lav-200 flex items-center gap-4 rounded-lg border px-4 py-4">
+                                                <Skeleton className="h-6 w-9 shrink-0" />
+                                                <Skeleton className="h-5 flex-1" />
+                                                <Skeleton className="hidden h-5 w-16 sm:block" />
+                                                <Skeleton className="hidden h-5 w-12 sm:block" />
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                                 {paymentMethods.error && (
