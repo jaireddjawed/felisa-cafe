@@ -27,9 +27,6 @@ use App\Square\SquareUnavailableException;
  */
 class PayOrder
 {
-    /** A tip may not exceed the order total, or $100, whichever is larger. */
-    private const TIP_FLOOR_CENTS = 10_000;
-
     public function __construct(
         private readonly SquareGateway $square,
         private readonly ApplySquareOrderState $applyState,
@@ -46,7 +43,7 @@ class PayOrder
             throw CheckoutException::unavailable();
         }
 
-        $tipCents = $this->validateTip($order, $tipCents);
+        $tipCents = $this->validateTip($tipCents);
 
         try {
             $result = $this->square->createPayment(
@@ -105,11 +102,18 @@ class PayOrder
         );
     }
 
-    private function validateTip(Order $order, int $tipCents): int
+    /**
+     * A tip is whatever the customer chooses to give, so there is no ceiling
+     * here. The only bad value is a negative one, which would refund them.
+     *
+     * The guard against a fat-fingered amount ($500 for $5) lives in the
+     * checkout page, where the customer can be asked "is that right?". It is
+     * not enforced here: this is the customer's own card and their own
+     * request, so a value that skips the question can only cost them.
+     */
+    private function validateTip(int $tipCents): int
     {
-        $maximum = max(self::TIP_FLOOR_CENTS, $order->total_cents);
-
-        if ($tipCents < 0 || $tipCents > $maximum) {
+        if ($tipCents < 0) {
             throw CheckoutException::declined('That tip amount is not valid.');
         }
 

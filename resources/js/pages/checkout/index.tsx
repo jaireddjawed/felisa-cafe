@@ -9,6 +9,14 @@ import type { Cart, Money, SavedCard, SharedProps } from '@/types';
 
 const CARD_CONTAINER_ID = 'square-card';
 const GOOGLE_PAY_CONTAINER_ID = 'square-google-pay';
+const TIP_SECTION_ID = 'checkout-tip';
+
+/**
+ * A tip above this, and above the order itself, is checked with the customer
+ * before it is charged. It is not a limit: it is there to catch a slip like
+ * $500 for $5, and any amount can be confirmed.
+ */
+const LARGE_TIP_FLOOR_CENTS = 5_000;
 
 type Props = {
     cart: Cart;
@@ -104,6 +112,14 @@ export default function Checkout({
     );
     const [cardError, setCardError] = useState<string | null>(null);
 
+    // The tip amount the customer has said is right, and the payment waiting on
+    // that answer. Confirming a different amount asks again.
+    const [confirmedTipCents, setConfirmedTipCents] = useState<number | null>(
+        null,
+    );
+    const [confirmingTip, setConfirmingTip] = useState(false);
+    const pendingPayment = useRef<(() => Promise<PaymentFields>) | null>(null);
+
     // An expired card cannot be charged, so it is never the one offered first.
     const [chosenCardId, setChosenCardId] = useState<number | null>(
         savedCards.find((card) => !card.expired)?.id ?? null,
@@ -137,6 +153,11 @@ export default function Checkout({
     const orderTotalCents = pricingPreview?.total.cents ?? cart.subtotal.cents;
     const paymentTotalCents = orderTotalCents + tipCents;
     const paymentTotal = formatCents(paymentTotalCents, currency);
+
+    const isLargeTip =
+        tipCents > Math.max(LARGE_TIP_FLOOR_CENTS, orderTotalCents);
+    const showTipConfirmation =
+        confirmingTip && isLargeTip && confirmedTipCents !== tipCents;
 
     const paymentRequest = useMemo(
         () => ({
@@ -177,10 +198,24 @@ export default function Checkout({
         !paymentMethods.walletsSettled &&
         !paymentMethods.error;
 
-    async function pay(prepare: () => Promise<PaymentFields>) {
+    async function pay(
+        prepare: () => Promise<PaymentFields>,
+        { tipConfirmed = false }: { tipConfirmed?: boolean } = {},
+    ) {
         if (submitting.current || form.processing || !cart.valid) {
             return;
         }
+
+        // Ask before anything is tokenized, so a "no" costs the customer
+        // nothing and spends no card token.
+        if (!tipConfirmed && isLargeTip && confirmedTipCents !== tipCents) {
+            pendingPayment.current = prepare;
+            setConfirmingTip(true);
+
+            return;
+        }
+
+        setConfirmingTip(false);
 
         submitting.current = true;
         setTokenizing(true);
@@ -210,6 +245,27 @@ export default function Checkout({
             );
         }
     }
+
+    const confirmTip = () => {
+        const prepare = pendingPayment.current;
+
+        pendingPayment.current = null;
+        setConfirmingTip(false);
+        setConfirmedTipCents(tipCents);
+
+        if (prepare) {
+            void pay(prepare, { tipConfirmed: true });
+        }
+    };
+
+    const reviewTip = () => {
+        pendingPayment.current = null;
+        setConfirmingTip(false);
+
+        document
+            .getElementById(TIP_SECTION_ID)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
 
     /** Wallets are one-off: there is no card of ours to keep. */
     const payWithWallet = (tokenize: () => Promise<string>) =>
@@ -489,7 +545,7 @@ export default function Checkout({
 
                         <div className="mt-4 grid gap-5">
                             {allowTipping && (
-                                <div>
+                                <div id={TIP_SECTION_ID}>
                                     <h3 className="font-marker text-lav-800 text-xl">
                                         Add a tip
                                     </h3>
@@ -797,6 +853,40 @@ export default function Checkout({
                                     </label>
                                 )}
                             </div>
+
+                            {showTipConfirmation && (
+                                <div
+                                    role="alert"
+                                    className="sticker rounded-2xl border-2 border-amber-300 bg-amber-50 p-4"
+                                >
+                                    <p className="font-hand text-xl text-amber-900">
+                                        Your tip is{' '}
+                                        <span className="font-marker">
+                                            {formatCents(tipCents, currency)}
+                                        </span>
+                                        , which is a lot more than the{' '}
+                                        {formatCents(orderTotalCents, currency)}{' '}
+                                        order. Is that right?
+                                    </p>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={confirmTip}
+                                            className="sticker bg-lav-600 font-marker hover:bg-lav-700 rounded-full px-5 py-2 text-lg text-white transition"
+                                        >
+                                            Yes, tip{' '}
+                                            {formatCents(tipCents, currency)}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={reviewTip}
+                                            className="font-hand text-lav-700 hover:bg-lav-200 border-lav-400 rounded-full border-2 border-dashed px-5 py-2 text-lg transition"
+                                        >
+                                            Change my tip
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {(errors.checkout || cardError) && (
                                 <p
