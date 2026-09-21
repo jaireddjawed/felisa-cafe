@@ -189,3 +189,73 @@ it('keeps both forms away from guests', function (): void {
     $this->put(route('user-password.update'), ['current_password' => 'a', 'password' => 'b', 'password_confirmation' => 'b'])
         ->assertRedirect(route('login'));
 });
+
+it('remembers the confirmed address when it is replaced', function (): void {
+    Notification::fake();
+
+    $user = User::factory()->create(['email' => 'old@example.com']);
+
+    $this->actingAs($user)
+        ->put(route('user-profile-information.update'), ['name' => $user->name, 'email' => 'new@example.com']);
+
+    expect($user->fresh()->last_confirmed_email)->toBe('old@example.com');
+});
+
+it('keeps the last confirmed address through further changes before the new one is confirmed', function (): void {
+    Notification::fake();
+
+    $user = User::factory()->create(['email' => 'old@example.com']);
+
+    $this->actingAs($user)
+        ->put(route('user-profile-information.update'), ['name' => $user->name, 'email' => 'second@example.com'])
+        ->assertSessionHasNoErrors();
+
+    // "second" was never confirmed, so it must not replace "old".
+    $this->put(route('user-profile-information.update'), ['name' => $user->name, 'email' => 'third@example.com'])
+        ->assertSessionHasNoErrors();
+
+    expect($user->fresh()->email)->toBe('third@example.com')
+        ->and($user->fresh()->last_confirmed_email)->toBe('old@example.com');
+});
+
+it('sends receipts to the confirmed address until the new one is confirmed', function (): void {
+    $confirmed = User::factory()->create(['email' => 'confirmed@example.com']);
+    expect($confirmed->receiptEmail())->toBe('confirmed@example.com');
+
+    $switched = User::factory()->unverified()->create([
+        'email' => 'new@example.com',
+        'last_confirmed_email' => 'old@example.com',
+    ]);
+    expect($switched->receiptEmail())->toBe('old@example.com');
+
+    // Once the new address is confirmed it is the one that counts.
+    $switched->forceFill(['email_verified_at' => now()])->save();
+    expect($switched->receiptEmail())->toBe('new@example.com');
+
+    // An account that never confirmed anything has nowhere better to use.
+    $never = User::factory()->unverified()->create(['email' => 'never@example.com']);
+    expect($never->receiptEmail())->toBe('never@example.com');
+});
+
+it('signs out other devices when the password changes, but not this one', function (): void {
+    $user = User::factory()->create(['password' => 'old-password-123']);
+    $oldHash = $user->getAuthPassword();
+
+    // This device, signed in with the old password.
+    $this->actingAs($user)
+        ->withSession(['password_hash_web' => $oldHash])
+        ->put(route('user-password.update'), [
+            'current_password' => 'old-password-123',
+            'password' => 'brand-new-password-456',
+            'password_confirmation' => 'brand-new-password-456',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $this->get(route('settings'))->assertOk();
+
+    // Another device is still carrying the old password's hash.
+    $this->flushSession()
+        ->withSession(['password_hash_web' => $oldHash])
+        ->get(route('settings'))
+        ->assertRedirect(route('login'));
+});

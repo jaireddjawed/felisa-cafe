@@ -7,6 +7,8 @@ import type { AuthUser } from '@/types';
 type Props = {
     user: AuthUser;
     emailVerified: boolean;
+    /** Where order receipts go: the last confirmed address until the new one is. */
+    receiptEmail: string;
     /** "verification-link-sent" straight after a resend. */
     status: string | null;
 };
@@ -14,7 +16,12 @@ type Props = {
 const submitClasses =
     'sticker bg-lav-600 font-marker hover:bg-lav-700 rounded-full px-6 py-2.5 text-base text-white transition disabled:opacity-50';
 
-export default function ProfileForm({ user, emailVerified, status }: Props) {
+export default function ProfileForm({
+    user,
+    emailVerified,
+    receiptEmail,
+    status,
+}: Props) {
     return (
         <>
             <Form
@@ -72,6 +79,8 @@ export default function ProfileForm({ user, emailVerified, status }: Props) {
                         {status === 'verification-link-sent'
                             ? `We sent a fresh link to ${user.email}. It can take a minute to arrive.`
                             : `${user.email} has not been confirmed yet. Follow the link we emailed you, or ask for a new one.`}
+                        {receiptEmail !== user.email &&
+                            ` Until then, order receipts keep going to ${receiptEmail}.`}
                     </p>
                     <Form action={send()} options={{ preserveScroll: true }}>
                         {({ processing }) => (

@@ -53,6 +53,10 @@ class CheckoutController extends Controller
                 ->map(fn (SavedCard $card): array => $card->toPayload())
                 ->all(),
             'canSaveCard' => $user !== null,
+            // Where this order's receipt will go, and whether that is the
+            // account's current address or an earlier confirmed one.
+            'receiptEmail' => $user?->receiptEmail(),
+            'emailConfirmed' => $user?->hasVerifiedEmail() ?? true,
         ]);
     }
 

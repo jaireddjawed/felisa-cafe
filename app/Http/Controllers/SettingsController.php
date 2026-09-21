@@ -20,6 +20,7 @@ class SettingsController extends Controller
     {
         return Inertia::render('settings/index', [
             'emailVerified' => $request->user()->hasVerifiedEmail(),
+            'receiptEmail' => $request->user()->receiptEmail(),
             'passwordRules' => Password::defaults()->toPasswordRulesString(),
             // Set to "verification-link-sent" after a resend.
             'status' => $request->session()->get('status'),

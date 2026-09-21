@@ -40,6 +40,12 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
         $user->forceFill([
             'name' => $input['name'],
             'email' => $input['email'],
+            // Leaving a confirmed address remembers it, so receipts keep
+            // going there. Leaving an unconfirmed one keeps whichever
+            // confirmed address was remembered before.
+            'last_confirmed_email' => $emailChanged && $user->hasVerifiedEmail()
+                ? $user->email
+                : $user->last_confirmed_email,
             // A new address is unproven until its owner follows the link.
             'email_verified_at' => $emailChanged ? null : $user->email_verified_at,
         ])->save();

@@ -10,6 +10,7 @@ import type { SavedCard, SharedProps } from '@/types';
 type Props = {
     savedCards: SavedCard[];
     emailVerified: boolean;
+    receiptEmail: string;
     passwordRules: string;
     status: string | null;
 };
@@ -33,6 +34,7 @@ function expiry(card: SavedCard): string {
 export default function SettingsIndex({
     savedCards,
     emailVerified,
+    receiptEmail,
     passwordRules,
     status,
 }: Props) {
@@ -70,6 +72,7 @@ export default function SettingsIndex({
                         <ProfileForm
                             user={auth.user}
                             emailVerified={emailVerified}
+                            receiptEmail={receiptEmail}
                             status={status}
                         />
                     )}
