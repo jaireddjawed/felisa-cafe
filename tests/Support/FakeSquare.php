@@ -254,6 +254,43 @@ final class FakeSquare
     }
 
     /**
+     * The Square customer a saved card hangs off.
+     *
+     * @return array<string, mixed>
+     */
+    public static function customer(string $id = 'SQ_CUSTOMER_1'): array
+    {
+        return ['customer' => ['id' => $id, 'created_at' => '2026-09-21T00:00:00Z']];
+    }
+
+    /**
+     * A card Square has stored on file.
+     *
+     * @return array<string, mixed>
+     */
+    public static function card(
+        string $id = 'ccof:SQ_CARD_1',
+        string $brand = 'VISA',
+        string $last4 = '1111',
+        int $expMonth = 12,
+        int $expYear = 2030,
+        string $fingerprint = 'sq-1-FINGERPRINT',
+        string $customerId = 'SQ_CUSTOMER_1',
+    ): array {
+        return ['card' => [
+            'id' => $id,
+            'card_brand' => $brand,
+            'last_4' => $last4,
+            'exp_month' => $expMonth,
+            'exp_year' => $expYear,
+            'cardholder_name' => 'Jaired',
+            'fingerprint' => $fingerprint,
+            'customer_id' => $customerId,
+            'enabled' => true,
+        ]];
+    }
+
+    /**
      * The batch-retrieve response checkout uses to re-verify prices.
      *
      * @param  array<string, int>  $variationPrices  Square variation ID to cents

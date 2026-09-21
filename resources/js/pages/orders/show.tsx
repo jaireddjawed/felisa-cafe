@@ -1,7 +1,6 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { CatFace, Sparkle, SquiggleRule } from '@/components/doodles';
 import OrderStatusBadge from '@/components/order-status-badge';
-import { menu } from '@/routes';
 import type { Order } from '@/types';
 
 type Props = {
@@ -125,13 +124,6 @@ export default function OrderShow({ order }: Props) {
                         </div>
                     </div>
                 </section>
-
-                <Link
-                    href={menu()}
-                    className="sticker bg-lav-600 font-marker hover:bg-lav-700 rounded-full px-6 py-3 text-center text-lg text-white transition"
-                >
-                    Back to the menu
-                </Link>
             </div>
         </div>
     );

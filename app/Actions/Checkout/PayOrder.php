@@ -13,9 +13,10 @@ use App\Square\SquareRejectedException;
 use App\Square\SquareUnavailableException;
 
 /**
- * Charges a pending order with a card token produced by Square's Web Payments
- * SDK in the browser. The token is single-use and carries no card data, so
- * card details never reach this application.
+ * Charges a pending order against a resolved payment source: either a
+ * single-use token produced by Square's Web Payments SDK in the browser, or a
+ * card Square holds on file. Neither carries card data, so card details never
+ * reach this application.
  *
  * The amount charged is the order's own stored total plus the tip, never a
  * number sent by the browser.
@@ -33,7 +34,7 @@ class PayOrder
         private readonly ApplySquareOrderState $applyState,
     ) {}
 
-    public function handle(Order $order, string $sourceId, string $idempotencyKey, int $tipCents = 0): Order
+    public function handle(Order $order, PaymentSource $source, string $idempotencyKey, int $tipCents = 0): Order
     {
         // Already settled: a double submit must not charge twice.
         if ($order->status !== OrderStatus::PendingPayment) {
@@ -53,11 +54,13 @@ class PayOrder
                 referenceId: (string) $order->id,
                 amountCents: $order->total_cents,
                 tipCents: $tipCents,
-                sourceId: $sourceId,
+                sourceId: $source->sourceId,
                 customer: new CustomerContact(
                     $order->customer_name,
                     $order->customer_email,
                 ),
+                customerId: $source->squareCustomerId,
+                verificationToken: $source->verificationToken,
             );
         } catch (SquareRejectedException $exception) {
             report($exception);
@@ -74,6 +77,9 @@ class PayOrder
         $order->square_payment_id = $result->paymentId;
         $order->tip_cents = $tipCents;
         $order->save();
+
+        // Charging a stored card is what makes it the one to offer first.
+        $source->savedCard?->forceFill(['last_used_at' => now()])->save();
 
         return $this->applyState->handle($order, $result->order);
     }

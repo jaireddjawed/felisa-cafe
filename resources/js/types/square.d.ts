@@ -35,11 +35,37 @@ export interface SquareWallet {
     tokenize(): Promise<SquareTokenResult>;
 }
 
+/**
+ * Buyer verification. Square challenges the cardholder where the law asks for
+ * it (3-D Secure, SCA) and returns a token proving it happened.
+ */
+export interface SquareVerifyBuyerDetails {
+    intent: 'CHARGE' | 'STORE';
+    billingContact: {
+        givenName?: string;
+        familyName?: string;
+        email?: string;
+    };
+    customerInitiated: boolean;
+    sellerKeyedIn: boolean;
+    /** Charges are verified for an amount; storing a card is not. */
+    amount?: string;
+    currencyCode?: string;
+}
+
+export interface SquareVerifyBuyerResult {
+    token?: string;
+}
+
 export interface SquarePayments {
     card(): Promise<SquareCard>;
     paymentRequest(options: SquarePaymentRequestOptions): SquarePaymentRequest;
     applePay(paymentRequest: SquarePaymentRequest): Promise<SquareWallet>;
     googlePay(paymentRequest: SquarePaymentRequest): Promise<SquareWallet>;
+    verifyBuyer(
+        source: string,
+        details: SquareVerifyBuyerDetails,
+    ): Promise<SquareVerifyBuyerResult | null>;
 }
 
 declare global {

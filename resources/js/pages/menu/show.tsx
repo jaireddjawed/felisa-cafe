@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import AddToCart from '@/components/add-to-cart';
 import {
     CatFace,
@@ -7,7 +7,6 @@ import {
     SquiggleRule,
 } from '@/components/doodles';
 import ProductCard from '@/components/product-card';
-import { menu } from '@/routes';
 import type { Product, ProductDetail } from '@/types';
 
 type Props = {
@@ -19,13 +18,6 @@ export default function MenuShow({ product, alsoLike }: Props) {
     return (
         <div className="mx-auto max-w-6xl px-5 py-12">
             <Head title={product.name} />
-
-            <Link
-                href={menu()}
-                className="font-hand text-lav-600 hover:text-lav-800 text-xl underline decoration-dashed"
-            >
-                ← back to the menu
-            </Link>
 
             <div className="mt-6 grid gap-10 lg:grid-cols-2">
                 {/* ── The drink, drawn ───────────────────────────────────── */}

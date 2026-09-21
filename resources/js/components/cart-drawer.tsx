@@ -90,9 +90,6 @@ export default function CartDrawer({ cart, open, onClose }: Props) {
                             {cart.subtotal.formatted}
                         </span>
                     </div>
-                    <p className="font-hand text-lav-600 mt-1 text-lg">
-                        Pickup only for now — tax added at checkout.
-                    </p>
 
                     {cart.lines.length > 0 ? (
                         <Link

@@ -11,19 +11,24 @@ use App\Square\Data\OrderLine;
 use App\Square\Data\OrderPricing;
 use App\Square\Data\OrderState;
 use App\Square\Data\PaymentResult;
+use App\Square\Data\StoredCard;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Client as GuzzleClient;
 use LogicException;
+use Square\Cards\Requests\CreateCardRequest;
+use Square\Cards\Requests\DisableCardsRequest;
 use Square\Catalog\Requests\BatchDeleteCatalogObjectsRequest;
 use Square\Catalog\Requests\BatchGetCatalogObjectsRequest;
 use Square\Catalog\Requests\BatchUpsertCatalogObjectsRequest;
 use Square\Catalog\Requests\ListCatalogRequest;
+use Square\Customers\Requests\CreateCustomerRequest;
 use Square\Exceptions\SquareApiException as SquareSdkApiException;
 use Square\Exceptions\SquareException as SquareSdkException;
 use Square\Orders\Requests\CalculateOrderRequest;
 use Square\Orders\Requests\GetOrdersRequest;
 use Square\Payments\Requests\CreatePaymentRequest;
 use Square\SquareClient;
+use Square\Types\Card;
 use Square\Types\CatalogObject;
 use Square\Types\CatalogObjectBatch;
 use Square\Types\CreateOrderRequest;
@@ -307,6 +312,8 @@ final class SquareSdkGateway implements SquareGateway
         int $tipCents,
         string $sourceId,
         CustomerContact $customer,
+        ?string $customerId = null,
+        ?string $verificationToken = null,
     ): PaymentResult {
         $response = $this->send(
             fn (): mixed => $this->squareClient->payments->create(new CreatePaymentRequest([
@@ -320,6 +327,10 @@ final class SquareSdkGateway implements SquareGateway
                 'note' => "Online order {$referenceId}",
                 'tipMoney' => $tipCents > 0 ? $this->money($tipCents) : null,
                 'buyerEmailAddress' => $customer->email === '' ? null : $customer->email,
+                // Required when the source is a card on file: Square will only
+                // charge a stored card for the customer that owns it.
+                'customerId' => $customerId,
+                'verificationToken' => $verificationToken,
             ])),
             'payments.create',
         );
@@ -339,6 +350,73 @@ final class SquareSdkGateway implements SquareGateway
         );
 
         return $this->orderState($this->sdkModelToArray($response->getOrder()));
+    }
+
+    // -----------------------------------------------------------------------
+    // Customers and cards on file
+    // -----------------------------------------------------------------------
+
+    /**
+     * Square's customer record for one of our accounts. The reference ID is
+     * the local user ID, so a customer can always be traced back here.
+     */
+    public function createCustomer(
+        string $idempotencyKey,
+        CustomerContact $customer,
+        string $referenceId,
+    ): string {
+        $response = $this->send(
+            fn (): mixed => $this->squareClient->customers->create(new CreateCustomerRequest([
+                'idempotencyKey' => $idempotencyKey,
+                'givenName' => $customer->name === '' ? null : $customer->name,
+                'emailAddress' => $customer->email === '' ? null : $customer->email,
+                'referenceId' => $referenceId,
+            ])),
+            'customers.create',
+        );
+
+        $created = $this->sdkModelToArray($response->getCustomer());
+
+        return Json::string($created, 'id');
+    }
+
+    /**
+     * Stores a card against a customer. The single-use token is spent doing
+     * this, which is why the card returned here is what gets charged.
+     */
+    public function createCard(
+        string $idempotencyKey,
+        string $customerId,
+        string $sourceId,
+        CustomerContact $customer,
+        string $referenceId,
+        ?string $verificationToken = null,
+    ): StoredCard {
+        $response = $this->send(
+            fn (): mixed => $this->squareClient->cards->create(new CreateCardRequest([
+                'idempotencyKey' => $idempotencyKey,
+                'sourceId' => $sourceId,
+                'verificationToken' => $verificationToken,
+                'card' => new Card([
+                    'customerId' => $customerId,
+                    'cardholderName' => $customer->name === '' ? null : $customer->name,
+                    'referenceId' => $referenceId,
+                ]),
+            ])),
+            'cards.create',
+        );
+
+        return $this->storedCard($this->sdkModelToArray($response->getCard()));
+    }
+
+    public function disableCard(string $squareCardId): void
+    {
+        $this->send(
+            fn (): mixed => $this->squareClient->cards->disable(
+                new DisableCardsRequest(['cardId' => $squareCardId]),
+            ),
+            'cards.disable',
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -374,6 +452,28 @@ final class SquareSdkGateway implements SquareGateway
     // -----------------------------------------------------------------------
     // Mapping
     // -----------------------------------------------------------------------
+
+    /**
+     * @param  array<string, mixed>  $card
+     */
+    private function storedCard(array $card): StoredCard
+    {
+        $id = Json::string($card, 'id');
+
+        if ($id === '') {
+            throw new SquareUnavailableException('Square stored a card but did not return its ID.');
+        }
+
+        return new StoredCard(
+            squareCardId: $id,
+            brand: Json::string($card, 'card_brand'),
+            last4: Json::string($card, 'last_4'),
+            expMonth: Json::int($card, 'exp_month'),
+            expYear: Json::int($card, 'exp_year'),
+            cardholderName: Json::string($card, 'cardholder_name'),
+            fingerprint: Json::nullableString($card, 'fingerprint'),
+        );
+    }
 
     /**
      * @param  array<string, mixed>  $order

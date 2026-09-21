@@ -7,6 +7,8 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\SavedCardController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SquareWebhookController;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +29,15 @@ Route::get('checkout', [CheckoutController::class, 'show'])->name('checkout');
 Route::post('checkout', [CheckoutController::class, 'store'])
     ->middleware('throttle:10,1')
     ->name('checkout.store');
+
+// Cards on file belong to an account, so there is nothing here for a guest.
+Route::get('settings', [SettingsController::class, 'index'])
+    ->middleware('auth')
+    ->name('settings');
+
+Route::delete('saved-cards/{savedCard}', [SavedCardController::class, 'destroy'])
+    ->middleware('auth')
+    ->name('saved-cards.destroy');
 
 Route::get('orders', [OrderController::class, 'index'])
     ->middleware('auth')
