@@ -522,12 +522,27 @@ it('creates the Square order when an earlier attempt never reached Square', func
         ->and($stranded->fresh()->status)->toBe(OrderStatus::Paid);
 });
 
-it('rejects a tip larger than the order allows', function (): void {
+it('takes a tip larger than the order, because the customer chose it', function (): void {
     $product = checkoutReadyCart();
     fakeSquareFor($product);
 
     $this->post(route('checkout.store'), checkoutPayload(['tip_cents' => 50_000]))
-        ->assertSessionHasErrors('checkout');
+        ->assertSessionHasNoErrors();
+
+    expect(Order::query()->firstOrFail()->tip_cents)->toBe(50_000);
+
+    Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/v2/payments')
+        && $request->data()['tip_money']['amount'] === 50_000);
+});
+
+it('refuses a negative tip', function (): void {
+    $product = checkoutReadyCart();
+    fakeSquareFor($product);
+
+    $this->post(route('checkout.store'), checkoutPayload(['tip_cents' => -100]))
+        ->assertSessionHasErrors('tip_cents');
+
+    expect(Order::query()->count())->toBe(0);
 });
 
 it('records an accepted tip on the order', function (): void {
