@@ -53,11 +53,6 @@ export default function SettingsIndex({ savedCards }: Props) {
                     <h2 className="font-marker text-lav-800 text-2xl">
                         Saved cards
                     </h2>
-                    <p className="font-hand text-lav-600 mt-1 text-lg">
-                        Cards you chose to keep at checkout. Only the brand, the
-                        last four digits and the expiry are kept here — the card
-                        itself lives with our payment provider.
-                    </p>
                 </div>
 
                 {savedCards.length === 0 ? (
