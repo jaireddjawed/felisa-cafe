@@ -16,6 +16,13 @@ chown -R www-data:www-data /app/storage /app/bootstrap/cache
 
 # Run database migrations if configured or DB connection is present
 if [ "${AUTORUN_MIGRATIONS:-true}" = "true" ] && [ -n "${DB_HOST}" ]; then
+    # TEMPORARY: wipe every table before migrating. Only runs while RESET_DB=true
+    # is set on the service; remove this block once the test data is settled.
+    if [ "${RESET_DB:-false}" = "true" ]; then
+        echo "RESET_DB=true: dropping all tables..."
+        php artisan db:wipe --force
+    fi
+
     echo "Running database migrations..."
     php artisan migrate --force
 
