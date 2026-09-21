@@ -13,6 +13,7 @@ use App\Square\Data\OrderPricing;
 use App\Square\Data\OrderState;
 use App\Square\Data\PaymentResult;
 use App\Square\Data\StoredCard;
+use App\Square\IdempotencyKey;
 use App\Square\Json;
 use App\Square\SquareException;
 use App\Square\SquareGateway;
@@ -170,6 +171,8 @@ final class FakeSquareClient implements SquareGateway
         ?string $customerId = null,
         ?string $verificationToken = null,
     ): PaymentResult {
+        $this->assertKeyFits($idempotencyKey, '/v2/payments');
+
         $payload = [
             'source_id' => $sourceId,
             'idempotency_key' => $idempotencyKey,
@@ -207,6 +210,8 @@ final class FakeSquareClient implements SquareGateway
         CustomerContact $customer,
         string $referenceId,
     ): string {
+        $this->assertKeyFits($idempotencyKey, '/v2/customers');
+
         $body = $this->request('POST', '/v2/customers', array_filter([
             'idempotency_key' => $idempotencyKey,
             'given_name' => $customer->name,
@@ -225,6 +230,8 @@ final class FakeSquareClient implements SquareGateway
         string $referenceId,
         ?string $verificationToken = null,
     ): StoredCard {
+        $this->assertKeyFits($idempotencyKey, '/v2/cards');
+
         $payload = [
             'idempotency_key' => $idempotencyKey,
             'source_id' => $sourceId,
@@ -267,6 +274,21 @@ final class FakeSquareClient implements SquareGateway
     public function verifyWebhookSignature(string $rawBody, string $signature): bool
     {
         return hash_equals(FakeSquare::signature($rawBody), $signature);
+    }
+
+    /**
+     * Square refuses a longer key outright, so the fake does too. Without
+     * this a key that is too long passes every test and fails only for real.
+     */
+    private function assertKeyFits(string $idempotencyKey, string $path): void
+    {
+        if (strlen($idempotencyKey) > IdempotencyKey::MAX_LENGTH) {
+            throw new SquareRejectedException(
+                "Square {$path} rejected the request (400): VALUE_TOO_LONG Field must not be greater than "
+                .IdempotencyKey::MAX_LENGTH.' length',
+                errorCode: 'VALUE_TOO_LONG',
+            );
+        }
     }
 
     /**
@@ -329,7 +351,7 @@ final class FakeSquareClient implements SquareGateway
             return new SquareUnavailableException("Square {$path} failed with {$status}: ".trim("{$code} {$detail}"));
         }
 
-        return new SquareRejectedException($message);
+        return new SquareRejectedException($message, errorCode: $code === 'UNKNOWN' ? null : $code);
     }
 
     /**

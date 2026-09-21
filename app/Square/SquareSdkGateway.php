@@ -609,7 +609,24 @@ final class SquareSdkGateway implements SquareGateway
             return new SquareUnavailableException("Square {$operation} failed with {$status}: {$detail}");
         }
 
-        return new SquareRejectedException("Square {$operation} rejected the request ({$status}): {$detail}");
+        return new SquareRejectedException(
+            "Square {$operation} rejected the request ({$status}): {$detail}",
+            errorCode: $this->errorCode($exception),
+        );
+    }
+
+    /** Square's machine-readable reason for the first error, if it gave one. */
+    private function errorCode(SquareSdkApiException $exception): ?string
+    {
+        $errors = $exception->getErrors();
+
+        if ($errors === []) {
+            return null;
+        }
+
+        $code = Json::string($errors[0]->jsonSerialize(), 'code');
+
+        return $code === '' ? null : $code;
     }
 
     /** Square's error detail, which carries its error code but never credentials. */

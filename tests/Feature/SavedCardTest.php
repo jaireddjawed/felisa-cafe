@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\SavedCard;
 use App\Models\User;
+use App\Square\IdempotencyKey;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
@@ -131,6 +132,22 @@ it('keeps a card on file when the customer asks for it', function (): void {
         ->and($card->last_4)->toBe('1111')
         ->and($card->exp_month)->toBe(12)
         ->and(Order::query()->firstOrFail()->status)->toBe(OrderStatus::Paid);
+});
+
+it("derives the Square customer key from the account's email, not its ID", function (): void {
+    // IDs are only unique within one database, and every environment using the
+    // same Square account shares one set of idempotency keys.
+    $this->actingAs(User::factory()->create(['email' => 'Card.Owner@Example.com']));
+
+    $product = cardReadyCart();
+    fakeSquareWithCards($product);
+
+    $this->post(route('checkout.store'), cardCheckoutPayload(['save_card' => true]));
+
+    $expected = IdempotencyKey::make('felisa-customer', 'card.owner@example.com');
+
+    Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/v2/customers')
+        && $request->data()['idempotency_key'] === $expected);
 });
 
 it('charges the stored card rather than the token that created it', function (): void {

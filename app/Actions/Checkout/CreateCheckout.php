@@ -14,6 +14,7 @@ use App\Models\Modifier;
 use App\Models\Order;
 use App\Square\Data\CustomerContact;
 use App\Square\Data\OrderLine;
+use App\Square\IdempotencyKey;
 use App\Square\SquareGateway;
 use App\Square\SquareRejectedException;
 use App\Square\SquareUnavailableException;
@@ -33,7 +34,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Idempotency has two layers. The customer's key maps to exactly one local
  * order, so a resubmitted form resumes rather than duplicates. The key sent to
- * Square is derived from the local order ID and the request is rebuilt from
+ * Square is derived from that same customer key and the request is rebuilt from
  * the saved order, so a retry after a timeout — where the request succeeded at
  * Square but the response was lost — returns the original Square order instead
  * of creating a second one.
@@ -223,7 +224,7 @@ class CreateCheckout
 
         try {
             $state = $this->square->createOrder(
-                idempotencyKey: "felisa-order-{$order->id}",
+                idempotencyKey: $this->squareOrderKey($order),
                 referenceId: (string) $order->id,
                 lines: array_values($lines),
                 customer: new CustomerContact(
@@ -263,6 +264,21 @@ class CreateCheckout
         $order->save();
 
         return $order;
+    }
+
+    /**
+     * The key Square sees for this order's creation.
+     *
+     * It must be unique across everything that shares the Square account, not
+     * just this database. A local ID is not: two environments (local and a
+     * deploy, or one database before and after a reset) each hand out "order
+     * 4", and Square would replay whichever it saw first, already paid, in
+     * place of the new order. The browser's random key is unique per checkout
+     * and stored on the order, so a retry still rebuilds the identical key.
+     */
+    private function squareOrderKey(Order $order): string
+    {
+        return IdempotencyKey::make('felisa-order', $order->idempotency_key);
     }
 
     private function prepMinutes(Order $order): int
