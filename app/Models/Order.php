@@ -10,17 +10,20 @@ use Carbon\CarbonImmutable;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The local record of a checkout. Its items are an immutable snapshot, so the
  * order stays historically correct after products change.
  *
- * @property int $id
- * @property int|null $user_id
+ * @property string $id
+ * @property int $number
+ * @property string|null $user_id
  * @property OrderStatus $status
  * @property string $customer_name
  * @property string $customer_email
@@ -48,15 +51,30 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Order extends Model
 {
     /** @use HasFactory<OrderFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
 
     protected $guarded = [];
+
+    /**
+     * `number` is assigned by the database sequence, not by the model, so a
+     * freshly created instance does not carry it back the way it does for an
+     * incrementing primary key. Without this, `reference()` on a just-created
+     * order (e.g. the receipt email sent moments after checkout) would read
+     * as "000000".
+     */
+    protected static function booted(): void
+    {
+        static::created(function (self $order): void {
+            $order->setAttribute('number', DB::table('orders')->where('id', $order->id)->value('number'));
+        });
+    }
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
             'status' => OrderStatus::class,
+            'number' => 'integer',
             'subtotal_cents' => 'integer',
             'tax_cents' => 'integer',
             'tip_cents' => 'integer',
@@ -125,10 +143,10 @@ class Order extends Model
         return new Money($this->total_cents, $this->currency);
     }
 
-    /** A short, human-quotable reference: "Order #A1B2C3". */
+    /** A short, human-quotable reference: "Order #000001". */
     public function reference(): string
     {
-        return str_pad((string) $this->id, 6, '0', STR_PAD_LEFT);
+        return str_pad((string) $this->number, 6, '0', STR_PAD_LEFT);
     }
 
     /** The number of made-to-order items: the unit of work the ETA schedules. */

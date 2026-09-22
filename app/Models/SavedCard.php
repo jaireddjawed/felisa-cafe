@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Database\Factories\SavedCardFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,8 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * record holds the ID needed to charge it again and the few details needed to
  * show the customer which card they are picking.
  *
- * @property int $id
- * @property int $user_id
+ * @property string $id
+ * @property string $user_id
  * @property string $square_card_id
  * @property string|null $fingerprint
  * @property string $brand
@@ -32,7 +33,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SavedCard extends Model
 {
     /** @use HasFactory<SavedCardFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
 
     protected $guarded = [];
 

@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\ProductCategory;
 use App\Support\Money;
 use Database\Factories\OrderItemFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,9 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * copied here on purpose: an old order must never be reconstructed from
  * current Product rows.
  *
- * @property int $id
- * @property int $order_id
- * @property int|null $product_id
+ * @property string $id
+ * @property string $order_id
+ * @property string|null $product_id
  * @property string $product_name
  * @property string $product_slug
  * @property ProductCategory|null $category
@@ -36,7 +37,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OrderItem extends Model
 {
     /** @use HasFactory<OrderItemFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
 
     protected $guarded = [];
 

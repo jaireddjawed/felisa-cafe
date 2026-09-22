@@ -20,8 +20,8 @@ return new class extends Migration
         // list. The number, CVV and expiry stay at Square; `square_card_id` is
         // the only thing that can be charged, and only with our access token.
         Schema::create('saved_cards', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
 
             $table->string('square_card_id')->unique();
             // Square's own identifier for the underlying card number, used to

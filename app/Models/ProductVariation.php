@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Support\Money;
 use Database\Factories\ProductVariationFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,8 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * A sellable variant of a product ("Espresso" vs "Matcha"). Its Square ID is
  * what goes on a Square order line, and what the cart stores.
  *
- * @property int $id
- * @property int $product_id
+ * @property string $id
+ * @property string $product_id
  * @property string $square_variation_id
  * @property int $square_version
  * @property string $name
@@ -28,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProductVariation extends Model
 {
     /** @use HasFactory<ProductVariationFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
 
     protected $guarded = [];
 

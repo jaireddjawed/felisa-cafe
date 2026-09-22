@@ -45,7 +45,7 @@ type Props = {
 /** The fields that say what this attempt is paying with. */
 type PaymentFields = {
     source_id: string;
-    saved_card_id: number | null;
+    saved_card_id: string | null;
     save_card: boolean;
     verification_token: string | null;
 };
@@ -100,7 +100,7 @@ export default function Checkout({
         email: auth.user?.email ?? '',
         notes: '',
         source_id: '',
-        saved_card_id: null as number | null,
+        saved_card_id: null as string | null,
         save_card: false,
         verification_token: null as string | null,
         tip_cents: 0,
@@ -127,7 +127,7 @@ export default function Checkout({
     const pendingPayment = useRef<(() => Promise<PaymentFields>) | null>(null);
 
     // An expired card cannot be charged, so it is never the one offered first.
-    const [chosenCardId, setChosenCardId] = useState<number | null>(
+    const [chosenCardId, setChosenCardId] = useState<string | null>(
         savedCards.find((card) => !card.expired)?.id ?? null,
     );
     const [saveCard, setSaveCard] = useState(false);

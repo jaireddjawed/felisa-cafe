@@ -126,7 +126,7 @@ class CalculateOrderEta
      *
      * @return list<int>
      */
-    private function queuedWork(?int $excludingOrderId = null): array
+    private function queuedWork(?string $excludingOrderId = null): array
     {
         $orders = Order::query()
             ->inQueue()
