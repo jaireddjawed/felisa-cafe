@@ -28,8 +28,7 @@ function isWithinPickupWindow(estimatedReadyAt: string | null): boolean {
     }
 
     const hoursSinceReady =
-        (Date.now() - new Date(estimatedReadyAt).getTime()) /
-        (1000 * 60 * 60);
+        (Date.now() - new Date(estimatedReadyAt).getTime()) / (1000 * 60 * 60);
 
     return hoursSinceReady < PICKUP_WINDOW_HOURS;
 }
