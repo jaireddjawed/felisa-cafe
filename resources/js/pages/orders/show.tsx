@@ -7,6 +7,8 @@ type Props = {
     order: Order;
 };
 
+const PICKUP_WINDOW_HOURS = 2;
+
 function formatTime(iso: string | null): string | null {
     if (!iso) {
         return null;
@@ -18,8 +20,25 @@ function formatTime(iso: string | null): string | null {
     }).format(new Date(iso));
 }
 
+/** Fresh orders show a ready time; once the pickup window has likely
+ *  passed, the order is just history and the estimate is stale. */
+function isWithinPickupWindow(estimatedReadyAt: string | null): boolean {
+    if (!estimatedReadyAt) {
+        return true;
+    }
+
+    const hoursSinceReady =
+        (Date.now() - new Date(estimatedReadyAt).getTime()) /
+        (1000 * 60 * 60);
+
+    return hoursSinceReady < PICKUP_WINDOW_HOURS;
+}
+
 export default function OrderShow({ order }: Props) {
     const readyTime = formatTime(order.estimatedReadyAt);
+    const showPickupStatus =
+        order.status !== 'cancelled' &&
+        isWithinPickupWindow(order.estimatedReadyAt);
 
     return (
         <div className="mx-auto max-w-3xl px-5 py-12">
@@ -44,7 +63,7 @@ export default function OrderShow({ order }: Props) {
             <SquiggleRule className="text-lav-400 my-6 h-5 w-full" />
 
             <div className="grid gap-5">
-                {order.status !== 'cancelled' && (
+                {showPickupStatus && (
                     <section className="sticker bg-lav-100 rounded-3xl p-6">
                         <div className="flex items-center gap-2">
                             <Sparkle
