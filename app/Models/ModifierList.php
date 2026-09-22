@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Database\Factories\ModifierListFactory;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 /**
  * A cached Square modifier list, e.g. "Milk" or "Add-Ons".
  *
- * @property int $id
+ * @property string $id
  * @property string $square_modifier_list_id
  * @property string $name
  * @property int $min_selected
@@ -25,7 +26,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 class ModifierList extends Model
 {
     /** @use HasFactory<ModifierListFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
 
     protected $guarded = [];
 

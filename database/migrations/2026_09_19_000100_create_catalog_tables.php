@@ -16,7 +16,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('products', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
 
             // Square-owned.
             $table->string('square_item_id')->nullable()->unique();
@@ -41,8 +41,8 @@ return new class extends Migration
         });
 
         Schema::create('product_variations', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('product_id')->constrained()->cascadeOnDelete();
             $table->string('square_variation_id')->unique();
             $table->bigInteger('square_version')->default(0);
             $table->string('name');
@@ -56,7 +56,7 @@ return new class extends Migration
         });
 
         Schema::create('modifier_lists', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
             $table->string('square_modifier_list_id')->unique();
             $table->string('name');
             // Normalized Square semantics: 0 means no minimum / no maximum.
@@ -66,8 +66,8 @@ return new class extends Migration
         });
 
         Schema::create('modifiers', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('modifier_list_id')->constrained()->cascadeOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('modifier_list_id')->constrained()->cascadeOnDelete();
             $table->string('square_modifier_id')->unique();
             $table->string('name');
             $table->integer('price_cents')->default(0);
@@ -79,10 +79,12 @@ return new class extends Migration
 
         // A modifier list as it applies to one product, with Square's
         // item-level selection overrides already resolved.
+        // Not a model, just a pivot table: no Eloquent class ever generates a
+        // UUID for it, so it keeps a plain auto-incrementing key.
         Schema::create('modifier_list_product', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('modifier_list_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('product_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('modifier_list_id')->constrained()->cascadeOnDelete();
             $table->integer('min_selected')->default(0);
             $table->integer('max_selected')->default(0);
             $table->integer('position')->default(0);

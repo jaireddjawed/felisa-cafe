@@ -11,6 +11,7 @@ use Carbon\CarbonImmutable;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * lists; the catalog sync overwrites them. The app owns slug, tagline,
  * ingredients, size, pour colors, badge and sort order.
  *
- * @property int $id
+ * @property string $id
  * @property string|null $square_item_id
  * @property int $square_version
  * @property CatalogStatus $status
@@ -47,7 +48,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
 
     protected $guarded = [];
 

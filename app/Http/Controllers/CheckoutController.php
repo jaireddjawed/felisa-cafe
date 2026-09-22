@@ -122,7 +122,7 @@ class CheckoutController extends Controller
      * Lets a guest see the order they just placed. Their session is the proof
      * of ownership, so no token has to be handed to the browser.
      */
-    private function rememberGuestOrder(CheckoutRequest $request, int $orderId): void
+    private function rememberGuestOrder(CheckoutRequest $request, string $orderId): void
     {
         if ($request->user() !== null) {
             return;

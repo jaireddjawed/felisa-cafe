@@ -38,7 +38,7 @@ export interface Pour {
 
 /** What a menu card needs. */
 export interface Product {
-    id: number;
+    id: string;
     slug: string;
     name: string;
     category: ProductCategory | null;
@@ -103,7 +103,7 @@ export interface Cart {
 }
 
 export interface OrderItem {
-    id: number;
+    id: string;
     productName: string;
     productSlug: string;
     /** "Espresso · Oat Milk", as chosen at the time of purchase. */
@@ -115,7 +115,7 @@ export interface OrderItem {
 }
 
 export interface Order {
-    id: number;
+    id: string;
     reference: string;
     status: OrderStatus;
     statusLabel: string;
@@ -135,7 +135,7 @@ export interface Order {
  * is this application's own row, and is all the browser ever sends back.
  */
 export interface SavedCard {
-    id: number;
+    id: string;
     brand: string;
     last4: string;
     expMonth: number;
@@ -156,7 +156,7 @@ export interface Shop {
 }
 
 export interface AuthUser {
-    id: number;
+    id: string;
     name: string;
     email: string;
 }

@@ -43,9 +43,10 @@ class CheckoutRequest extends FormRequest
             // the customer making the request. Guests match nothing.
             'saved_card_id' => [
                 'nullable',
-                'integer',
+                'string',
+                'uuid',
                 // No account means no match, which is what a guest should get.
-                Rule::exists('saved_cards', 'id')->where('user_id', Auth::id() ?? 0),
+                Rule::exists('saved_cards', 'id')->where('user_id', Auth::id()),
             ],
             'save_card' => ['nullable', 'boolean'],
             // Square's buyer verification result, when the browser produced
@@ -88,9 +89,9 @@ class CheckoutRequest extends FormRequest
     public function savedCard(): ?SavedCard
     {
         $user = $this->user();
-        $savedCardId = $this->integer('saved_card_id');
+        $savedCardId = $this->string('saved_card_id')->toString();
 
-        if ($user === null || $savedCardId === 0) {
+        if ($user === null || $savedCardId === '') {
             return null;
         }
 

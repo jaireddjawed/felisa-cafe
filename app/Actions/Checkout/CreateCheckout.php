@@ -52,7 +52,7 @@ class CreateCheckout
         CustomerContact $customer,
         string $idempotencyKey,
         string $notes = '',
-        ?int $userId = null,
+        ?string $userId = null,
     ): Order {
         $existing = Order::query()->where('idempotency_key', $idempotencyKey)->first();
 
@@ -146,7 +146,7 @@ class CreateCheckout
         CustomerContact $customer,
         string $idempotencyKey,
         string $notes,
-        ?int $userId,
+        ?string $userId,
     ): Order {
         return DB::transaction(function () use ($priced, $customer, $idempotencyKey, $notes, $userId): Order {
             $order = Order::query()->create([

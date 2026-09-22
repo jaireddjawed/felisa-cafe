@@ -12,9 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('orders', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
+            // A short, sequential, customer-quotable number ("Order #000001").
+            // The primary key is a UUID and has no natural ordinal to show.
+            $table->unsignedBigInteger('number')->autoIncrement()->unique();
             // Null for guest orders: an account is never required to buy.
-            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignUuid('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('status')->default('pending_payment')->index();
 
             $table->string('customer_name');
@@ -48,9 +51,9 @@ return new class extends Migration
         // An immutable snapshot of what was bought: order history stays
         // correct after products are renamed, repriced or deleted.
         Schema::create('order_items', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('order_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('product_id')->nullable()->constrained()->nullOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('order_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('product_id')->nullable()->constrained()->nullOnDelete();
 
             $table->string('product_name');
             $table->string('product_slug')->default('');
@@ -72,7 +75,7 @@ return new class extends Migration
         // Square delivers webhooks at least once and out of order. Recording
         // handled event IDs makes processing idempotent.
         Schema::create('processed_webhook_events', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
             $table->string('event_id')->unique();
             $table->string('event_type');
             $table->timestamp('processed_at');
